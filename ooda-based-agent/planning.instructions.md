@@ -68,7 +68,7 @@ Tarefas_concluidas:
 - [x] **Ação 3: Atualizar a Lógica de Decisão (`_llm_decide`)**
 - [x] **Ação 4: Atualizar o Loop Principal (`run`)**
 - [x] **Ação 5: Reescrever `perform_action`**
-- [ ] **Ação 6: Remover Lógica Obsoleta**
+- [x] **Ação 6: Remover Lógica Obsoleta**
 
 ### Detalhes do Plano
 
@@ -85,3 +85,23 @@ Tarefas_concluidas:
 4.  **Atualizar o Loop Principal (`run`)**: O método `run` será ajustado para que, se nenhuma ação válida for escolhida, o agente permaneça na página atual.
 
 5.  **Reescrever `perform_action`**: A função será reescrita para interpretar as novas estruturas de dados (`results` e `outcomes`) de `pages.py`, tornando o agente um executor declarativo.
+
+## Solicitação do Usuário (05/09/2025)
+
+**Usuário:** "quero que crie um novo arquivo .v3.ipynb quebrando as celulas de codigo e intercalando com celulas que explicam em detalhes. Quero que faça isso, def a def ou seja, função a função. comece inserindo o contexto e o plano no arquivo planning, depois siga step a step conforme as instuções, planeje e depois act 1 a 1"
+
+## Plano de Ação: Refatoração para v3
+
+- [x] **Ação 8: Criar o arquivo `advanced-pagination-based-ooda-agent.v3.ipynb`**
+- [ ] **Ação 9: Migrar e detalhar as funções globais**
+    - [x] **9.1:** Mover `create_character_sheet` para sua própria célula com explicação detalhada.
+    - [x] **9.2:** Mover `setup_character` para sua própria célula com explicação detalhada.
+    - [x] **9.3:** Mover `make_check` para sua própria célula com explicação detalhada.
+- [ ] **Ação 10: Migrar e detalhar a classe `Agent` método a método**
+    - [x] **10.1:** Criar a definição da classe `Agent` com `__init__` e `__repr__`, com explicação.
+    - [x] **10.2:** Mover `_llm_decide` para sua própria célula com explicação detalhada.
+    - [x] **10.3:** Mover `perform_action` para sua própria célula com explicação detalhada.
+    - [x] **10.4:** Mover `run` para sua própria célula com explicação detalhada.
+    - [x] **10.5:** Mover os métodos auxiliares (`_observe`, `_orient`) para sua própria célula com explicação detalhada.
+- [ ] **Ação 11: Migrar o ponto de entrada (`main`)**
+- [ ] **Ação 12: Marcar todas as tarefas da refatoração v3 como concluídas.**
