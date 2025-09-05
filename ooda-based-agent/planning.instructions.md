@@ -93,15 +93,15 @@ Tarefas_concluidas:
 ## Plano de Ação: Refatoração para v3
 
 - [x] **Ação 8: Criar o arquivo `advanced-pagination-based-ooda-agent.v3.ipynb`**
-- [ ] **Ação 9: Migrar e detalhar as funções globais**
+- [x] **Ação 9: Migrar e detalhar as funções globais**
     - [x] **9.1:** Mover `create_character_sheet` para sua própria célula com explicação detalhada.
     - [x] **9.2:** Mover `setup_character` para sua própria célula com explicação detalhada.
     - [x] **9.3:** Mover `make_check` para sua própria célula com explicação detalhada.
-- [ ] **Ação 10: Migrar e detalhar a classe `Agent` método a método**
+- [x] **Ação 10: Migrar e detalhar a classe `Agent` método a método**
     - [x] **10.1:** Criar a definição da classe `Agent` com `__init__` e `__repr__`, com explicação.
     - [x] **10.2:** Mover `_llm_decide` para sua própria célula com explicação detalhada.
     - [x] **10.3:** Mover `perform_action` para sua própria célula com explicação detalhada.
     - [x] **10.4:** Mover `run` para sua própria célula com explicação detalhada.
     - [x] **10.5:** Mover os métodos auxiliares (`_observe`, `_orient`) para sua própria célula com explicação detalhada.
-- [ ] **Ação 11: Migrar o ponto de entrada (`main`)**
-- [ ] **Ação 12: Marcar todas as tarefas da refatoração v3 como concluídas.**
+- [x] **Ação 11: Migrar o ponto de entrada (`main`)**
+- [x] **Ação 12: Marcar todas as tarefas da refatoração v3 como concluídas.**
