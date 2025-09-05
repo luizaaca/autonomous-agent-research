@@ -1,3 +1,7 @@
+# INSTRUÇÕES DE PLANEJAMENTO
+
+Sempre use este arquivo para planejar mudanças significativas na estrutura de dados ou na lógica do agente. Documente o objetivo, o plano de ação e os detalhes do plano aqui antes de fazer alterações no código. Use a formatação de ckecklist para rastrear o progresso. Entende o teor do projeto e continue o desenvolvimento de forma incremental anexando ao fim do arquivo.
+
 # Objetivo Principal
 
 Transformar `pages.py` em um "motor de jogo" puramente declarativo, movendo toda a lógica de mudança de estado (dano, cura, penalidades) para dentro da estrutura `choices`. O `Agent` no notebook se tornará um executor simples que interpreta essas instruções, eliminando a necessidade de analisar texto ou lógica implícita.
