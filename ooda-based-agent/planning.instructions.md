@@ -105,3 +105,11 @@ Tarefas_concluidas:
     - [x] **10.5:** Mover os métodos auxiliares (`_observe`, `_orient`) para sua própria célula com explicação detalhada.
 - [x] **Ação 11: Migrar o ponto de entrada (`main`)**
 - [x] **Ação 12: Marcar todas as tarefas da refatoração v3 como concluídas.**
+
+## Plano de Ação: Implementação de Efeitos e Penalidades (05/09/2025)
+
+- [x] **Ação 13: Implementar os métodos `apply_penalty` e `heal_status` na classe `Agent`.**
+- [x] **Ação 14: Modificar `perform_action` para processar a lista de `effects`.**
+- [x] **Ação 15: Atualizar `make_check` para considerar as penalidades ativas.**
+- [x] **Ação 16: Implementar o método `take_damage` na classe `Agent`.**
+- [x] **Ação 17: Marcar as tarefas como concluídas no arquivo de planejamento.**
