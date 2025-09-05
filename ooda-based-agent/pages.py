@@ -5,7 +5,10 @@ PAGES = {
     },
     2: {
         "text": "The rush hour traffic begins to break as you chauffeur Ernie across Euston Road and back north. Somewhere near Mornington Crescent he starts snoring. You stop around the corner from Prince of Wales Road to pick up supplies. On your third circuit, a parking space opens up in front of Mrs Fellaman's flat and you cut up an aggrieved woman in a Chelsea tractor to secure the spot. It is seven o'clock. Around eight, Ernie stirs. You watch him closely, but the way he whines and paws the door suggests no magic is involved. He lets you attach the lead and take him down a cul-de-sac for a comfort break. You capture the results in a latex glove and dispose of them lawfully. Ernie is willing to return to the car, which has remarkably not been ticketed during your three-minute absence. He shows no particular interest in Mrs Fellaman's flat and nods off again. You settle in to continue the stakeout. Characters recover over time. If you were Hurt, you now return to normal; update your character sheet by erasing the \"Hurt\" mark.",
-        "choices": [{"goto": 7}]
+        "choices": [{
+            "goto": 7,
+            "effects": [{"action": "heal_damage", "amount": 1}]
+        }]
     },
     3: {
         "text": "You hear the scuff of feet behind the door. It then opens and a little old woman sticks her head around the doorjamb. \"Yes? Can I help you?\" You ask if she is Mrs Eugenia Fellaman. \"Yes.\" Her eyes narrow. \"Are you with those two boys from earlier?\" You assure Mrs Fellaman you have come alone. She opens the door and steps out, blinking. As she steps up and scans the street, you notice the faded purple of a bruise on her left cheek.",
@@ -13,7 +16,15 @@ PAGES = {
     },
     4: {
         "text": "Wild-eyed, Knuckles grits his teeth as he swings the heavy masonry hammer at you. Knuckles is initiating an attack against you. His \"action\" is to try to hit you with his hammer. His Fighting skill is 40/20 (which means Regular 40/Hard 20). As the target of his attack, you get to \"respond.\" You may use a combat manoeuvre-a special type of attack to break his grip on the hammer. Decide whether you want to disarm your opponent or flee. Then carry out an opposed Fighting roll: Knuckles makes a Fighting roll and gets a Regular success. Make your own Fighting roll and compare the result to Knuckle's Regular success. Remember, a dice result of triple zero (100) is a fumble, while a 01 is a Critical success.",
-        "choices": [{"opposed_roll": "Fighting", "win": 8, "lose": 12, "draw": 28}]
+        "choices": [{
+            "opposed_roll": "Fighting",
+            "opponent_skill": {"full": 40, "half": 20},
+            "outcomes": {
+                "win": {"goto": 8},
+                "lose": {"goto": 12, "effects": [{"action": "take_damage", "amount": 2}]},
+                "draw": {"goto": 28}
+            }
+        }]
     },
     5: {
         "text": "You pull out of your precious parking space and turn south towards Russell Square, taking Camden Street to avoid the shuffling mass of tourists attracted to the Lock by overpriced hummus wraps, Doc Martens, and spicy noodles. On the edge of Somers Town you see a local butcher and pop out of the car for a necessary purchase. The Folly occupies a Georgian terrace on the south side of Russell Square, a location it shares with the Council of British International Schools, the London Mathematical Society, and a birdshit-covered statue of the fifth Duke of Bedford. You pull into the garage around the back. DC Grant's Ford Focus ST, or \"Asbo,\" is not there a bad sign. But perhaps his dog Toby is still in residence. Inside the Folly, Toby's basket is empty. A familiar ink-skirted figure glides past, her gaze moving across you like a duster on a long-neglected shelf. This is the housekeeper, Molly. You work up some courage and ask her if you can borrow the Folly's famed ghost-hunting dog. She stops and tilts her head to the side, the black almond-shaped eyes beneath her mob cap skewering you where you stand. After an awkward silence, you repeat the request, holding up your sausages. For a moment the meaty packet sits in your hand like a terrible, inadvertent insult. Then Molly straightens her head and glides to the door. She points to the far corner of the yard in a manner reminiscent of Donald Sutherland at the end of Invasion of the Body Snatchers.",
@@ -50,7 +61,25 @@ PAGES = {
     },
     13: {
         "text": "You descend the iron stairs. As you hear another plate shatter, you rap on the door. Immediately all noise ceases from inside. Nothing moves for 30 seconds. You lift up the letterbox and yell to Mrs Fellaman that you know she's in there and you don't intend to leave. After a prolonged pause, you hear the scuff of reluctant feet, and the door opens once more. Anger and guilt battle on Mrs Fellaman's face. \"What do you want this time?\" she says.",
-        "choices": [{"text": "Se você é um Policial", "goto": 18}, {"roll": "Power (POW)", "success": 22, "failure": 27}]
+        "choices": [
+            {
+                "conditional_on": "occupation",
+                "paths": {
+                    "Police Officer": {
+                        "text": "Usar sua autoridade como Policial",
+                        "goto": 18
+                    },
+                    "default": {
+                        "text": "Tentar usar sua força de vontade (não-policial)",
+                        "roll": "Power (POW)",
+                        "results": {
+                            "2": {"goto": 27},
+                            "3": {"goto": 22}
+                        }
+                    }
+                }
+            }
+        ]
     },
     14: {
         "text": "Mrs Fellaman stops as you ask about the bruise. She very deliberately does not lift her hand to her cheek. \"I walked into the door, didn't I?\" she says. \"You get like that when you're a bit older.\" You find a gentle way to say that neither of you believes that. She screws up her nose and pushes past you, back into the doorway.",
@@ -58,15 +87,38 @@ PAGES = {
     },
     15: {
         "text": "The volume of the snarling and rending increases as you pad across the yard and press yourself against the wall to look behind the bins. Abruptly, the noise stops. Make a Stealth roll.",
-        "choices": [{"roll": "Stealth", "success": 29, "failure": 40}]
+        "choices": [{
+            "roll": "Stealth",
+            "results": {
+                "5": {"goto": 29},
+                "4": {"goto": 29},
+                "3": {"goto": 29},
+                "2": {"goto": 40},
+                "1": {"goto": 40}
+            }
+        }]
     },
     16: {
         "text": "Knuckles begins to disengage from the fight. He edges his way towards the back window. Continue the combat. If your opponent was the last person to take their combat action, it is now your turn and vice versa. His Fighting skill is 40/20. Carry out an opposed Fighting roll.",
-        "choices": [{"opposed_roll": "Fighting", "win": 64, "lose": 103}]
+        "choices": [{
+            "opposed_roll": "Fighting",
+            "opponent_skill": {"full": 40, "half": 20},
+            "outcomes": {
+                "win": {"goto": 64},
+                "lose": {"goto": 103},
+                "draw": {"goto": 103}
+            }
+        }]
     },
     17: {
         "text": "You tell the parking warden that you are on official business and ask if she is often in this area late in the evening. Disappointed, she jabs her stylus at a small notice on a pole across the road that says \"Permit holders only until 11 pm.\" She replies, \"So, yes.\" You ask if she has noticed any recent disturbances. You are going to make a Luck roll.",
-        "choices": [{"luck_roll": True, "success": 25, "failure": 36}]
+        "choices": [{
+            "luck_roll": True,
+            "results": {
+                "3": {"goto": 25},
+                "2": {"goto": 36}
+            }
+        }]
     },
     18: {
         "text": "You tell Mrs Fellaman that you overheard an argument and a violent exchange, and you intend to enter her residence to assess the situation. \"No,\" she snaps. \"Bugger off.\" You inform her that you have reason to believe she is consorting with a spirit, in contravention of the Act against Conjuration, Witchcraft, and Dealing with Evil and Wicked Spirits 1604. Hopefully, Mrs Fellaman is not up to date on the legislation, as the Act was superseded in 1735. Her shoulders slump. \"You'd better come in,\" she says.",
@@ -94,15 +146,36 @@ PAGES = {
     },
     24: {
         "text": "You back up to the other side of the yard and try to see what is banging around behind the bins. Molly watches your heroics like a cat studies a mortally wounded pigeon. The animal if that is what it is seems to have quietened down. Make an Observation roll.",
-        "choices": [{"roll": "Observation", "success": 47, "failure": 53}]
+        "choices": [{
+            "roll": "Observation",
+            "results": {
+                "5": {"goto": 47},
+                "4": {"goto": 47},
+                "3": {"goto": 47},
+                "2": {"goto": 53},
+                "1": {"goto": 53}
+            }
+        }]
     },
     25: {
         "text": "\"Funny you should ask,\" she says. \"I've seen a couple of shady characters hanging around over there.\" She points the stylus across the road again. \"Not unusual for dealers to nip down the basement stairs to make a sale. But these two were more like... what would you call them... enforcers? The guys who break your leg to persuade you to pay up.\" Interesting. You cross the road.",
         "choices": [{"goto": 107}]
     },
     26: {
-        "text": "You concentrate on pushing Knuckles in the chest. \"Impello!\" Spend 1 magic point. Make a Magic skill roll. Since you have mastered Impello, you may have a bonus die.",
-        "choices": [{"roll": "Magic (com dado de bônus)", "success": 32, "failure": 56}]
+        "text": "You concentrate on pushing Knuckles in the chest. \"Impello!\" Spend 1 magic point. Make a Magic skill roll. Since you have mastered Impello, you may have a bonus dice.",
+        "choices": [{
+            "text": "Make a Magic skill roll.",
+            "effects": [{"action": "spend_magic", "amount": 1}],
+            "roll": "Magic",
+            "bonus_dice": True,
+            "results": {
+                "5": {"goto": 32},
+                "4": {"goto": 32},
+                "3": {"goto": 32},
+                "2": {"goto": 56},
+                "1": {"goto": 56}
+            }
+        }]
     },
     27: {
         "text": "You tell Mrs Fellaman you are aware her flat is haunted, and that you are a specialist who can help her deal with the offending spectre. \"It's none of your business,\" she says. \"Crock off, will you?\" The door slams in your face. Ernie stares at you from the car window. He seems unimpressed.",
@@ -126,15 +199,41 @@ PAGES = {
     },
     32: {
         "text": "Knuckles opens his eyes wide in surprise as he is shoved by an invisible hand. The hammer drops from his grasp. Make a Power (POW) roll.",
-        "choices": [{"roll": "Power (POW)", "success": 37, "failure": 45}]
+        "choices": [{
+            "roll": "Power (POW)",
+            "results": {
+                "5": {"goto": 37},
+                "4": {"goto": 37},
+                "3": {"goto": 37},
+                "2": {"goto": 45},
+                "1": {"goto": 45}
+            }
+        }]
     },
     33: {
         "text": "Accessing the rear of Mrs Fellaman's flat is not straightforward. It is one in a row of private gardens protected by a brick wall, a serious knot of shrubbery, and a locked wooden gate stained a pleasing cherry red. You could deal with the lock, but the simplest thing might be to go over the wall. You wait for the street to clear of passers-by. A mother with a young child is the last straggler. As she bends to adjust something in her buggy, you swing your leg up and brace yourself on the wall. Make an Athletics roll.",
-        "choices": [{"roll": "Athletics", "hard_success": 38, "success": 44, "failure": 49}]
+        "choices": [{
+            "roll": "Athletics",
+            "results": {
+                "5": {"goto": 38},
+                "4": {"goto": 38},
+                "3": {"goto": 44},
+                "2": {"goto": 49},
+                "1": {"goto": 49}
+            }
+        }]
     },
     34: {
         "text": "Knuckles prowls the living room, watching your movements for any sign of weakness. He feints with the business end of his hammer. Continue the combat. If Knuckles has just taken his action, it is now your action and vice versa. His Fighting skill is 40/20. Decide whether you want to disarm your opponent or flee. If you have already refused an opportunity to flee, you must attempt to disarm. Whether it is his turn to act or respond, Knuckles tries to damage you. Carry out an opposed Fighting roll. Knuckles makes a Fighting roll and gets a fail.",
-        "choices": [{"opposed_roll": "Fighting (vs Falha de Knuckles)", "win": 8, "lose": 12, "draw": 28}]
+        "choices": [{
+            "opposed_roll": "Fighting",
+            "opponent_skill": {"full": 40, "half": 20},
+            "outcomes": {
+                "win": {"goto": 8},
+                "lose": {"goto": 12, "effects": [{"action": "take_damage", "amount": 2}]},
+                "draw": {"goto": 28}
+            }
+        }]
     },
     35: {
         "text": "You ask about the two boys Mrs Fellaman referred to. She gives the street one last look and then returns to the doorway. \"Toerags,\" she says. \"Claimed I owe them money. I've never seen them before in my life. If they come back I'll give them something they won't like.\" Door-to-door scams are still popular in the area, particularly those that target the elderly. But this particular lady does not seem taken in by them.",
@@ -154,11 +253,41 @@ PAGES = {
     },
     39: {
         "text": "Irate at the loss of his hammer, Knuckles advances, fists raised. His boxing stance is informed more by trashy cinema than any commitment to the gym. Knuckles jabs at your face. If he has already taken his action, it is now your action and vice versa. If the last thing you did was cast a spell, it is now Knuckles' action. His Fighting skill is 40/20. Decide whether you want to damage your opponent or restrain him. Now, carry out an opposed Fighting roll.",
-        "choices": [{"opposed_roll": "Fighting", "win_damage": 54, "win_restrain": 59, "lose": 48}]
+        "choices": [
+            {
+                "text": "Attack (Damage)",
+                "opposed_roll": "Fighting",
+                "opponent_skill": {"full": 40, "half": 20},
+                "outcomes": {
+                    "win": {"goto": 54},
+                    "lose": {"goto": 48, "effects": [{"action": "take_damage", "amount": 1}]},
+                    "draw": {"goto": 48}
+                }
+            },
+            {
+                "text": "Try to immobilize (Restrain)",
+                "opposed_roll": "Fighting",
+                "opponent_skill": {"full": 40, "half": 20},
+                "outcomes": {
+                    "win": {"goto": 59},
+                    "lose": {"goto": 48, "effects": [{"action": "take_damage", "amount": 1}]},
+                    "draw": {"goto": 48}
+                }
+            }
+        ]
     },
     40: {
         "text": "A hairy missile with teeth launches from behind the bins. You throw yourself out of its path. Make a Dexterity (DEX) roll.",
-        "choices": [{"roll": "Dexterity (DEX)", "success": 58, "failure": 68}]
+        "choices": [{
+            "roll": "Dexterity (DEX)",
+            "results": {
+                "5": {"goto": 58},
+                "4": {"goto": 58},
+                "3": {"goto": 58},
+                "2": {"goto": 68},
+                "1": {"goto": 68}
+            }
+        }]
     },
     41: {
         "text": "Mrs Fellaman emerges from the kitchen holding a white-enamel camping mug and the kind of plastic cup that comes from the top of a Thermos flask. You sit down at the table. China crunches beneath your feet. \"Sorry I'm out of real cups,\" she says. Her teapot has somehow survived. As the tea brews she offers you a custard cream. You take one and ask about the ghost. \"He's my husband,\" she says, the edge of her mouth curling. \"Victor. He first showed up three months ago. Always at night. Same as he ever was. Quieter maybe.\" You lead the conversation slowly to the bruise on her cheek. She touches it as if she had forgotten it was there. \"We always used to row, you know, some people you just row with-I suppose even him being passed on couldn't change that. He made me so cross. I, uh...\" She looks sheepish. \"I forgot he was a ghost. I ran right through him, hit the wall, and fell over. You know how it is, you grab the nearest thing. That was the cupboard. It fell over, and then I had the Old Bill knocking at my door.\" Your custard cream is finished. You ask Mrs Fellaman to summon her husband for you. \"You're joking,\" she says. \"He comes and goes when he wants-always did.\" You push back your chair, stand up, and open your palm. You need a werelight to draw out the ghost. As there is no time pressure on you to cast the Werelight spell, there is no need to make a Magic roll to see if you are successful. Spend 1 magic point.",
@@ -169,7 +298,7 @@ PAGES = {
         "choices": [{"goto": 52}]
     },
     43: {
-        "text": "Knuckles is a little too slow this time. You catch his forearm and immobilise it. If you already had Knuckles restrained, and you are a Police Officer, go to 105. If you already had Knuckles restrained, and you are a Nurse or Social Worker, go to 84. Otherwise, continue the combat, but give Knuckles a penalty die for the remainder of the fight. You may attempt a further combat manoeuvre to restrain Knuckles completely.",
+        "text": "Knuckles is a little too slow this time. You catch his forearm and immobilise it. If you already had Knuckles restrained, and you are a Police Officer, go to 105. If you already had Knuckles restrained, and you are a Nurse or Social Worker, go to 84. Otherwise, continue the combat, but give Knuckles a penalty dice for the remainder of the fight. You may attempt a further combat manoeuvre to restrain Knuckles completely.",
         "choices": [{"text": "Se Knuckles já estava contido e você é Policial", "goto": 105}, {"text": "Se Knuckles já estava contido e você é Enfermeiro ou Assistente Social", "goto": 84}, {"text": "Caso contrário, continuar o combate", "goto": 16}]
     },
     44: {
@@ -206,11 +335,26 @@ PAGES = {
     },
     52: {
         "text": "You explain that this is a preliminary visit to a new client. The warden points her stylus at a small notice on a pole across the road. \"Permit holders only until 11 pm,\" she says. \"Do you have a permit for zone CA-F?\" You are going to make a Luck roll.",
-        "choices": [{"luck_roll": True, "success": 57, "failure": 66}]
+        "choices": [{
+            "luck_roll": True,
+            "results": {
+                "3": {"goto": 57},
+                "2": {"goto": 66}
+            }
+        }]
     },
     53: {
         "text": "You keep your eye on the dark recess behind the bins. Things seem to have quietened down. A shadow flops, the torn remains of a box catching an air current. Where is the creature that was enacting such loud violence a few seconds ago? A hairy missile with teeth erupts from the ground beside you. You throw yourself out of its path. Make a Hard Dexterity (DEX) roll.",
-        "choices": [{"roll": "Hard Dexterity (DEX)", "success": 58, "failure": 68}]
+        "choices": [{
+            "roll": "Hard Dexterity (DEX)",
+            "results": {
+                "5": {"goto": 58},
+                "4": {"goto": 58},
+                "3": {"goto": 58},
+                "2": {"goto": 68},
+                "1": {"goto": 68}
+            }
+        }]
     },
     54: {
         "text": "Your fist catches Knuckles on the ear. He yowls and cups a hand over it. Mark down on some scrap paper that you have inflicted 1 damage to Knuckles. If you have inflicted 3 or more damage in total, your opponent drops to the ground. Go to 99. Otherwise, go to 67.",
@@ -233,12 +377,12 @@ PAGES = {
         "choices": [{"goto": 77}]
     },
     59: {
-        "text": "You sidestep Knuckles' punch and get a lock on his arm. You try to force him to the ground. He continues to lash out at your legs and stomach. Continue the combat, but give Knuckles a penalty die for the remainder of the fight. You may attempt a further combat manoeuvre to restrain Knuckles completely.",
+        "text": "You sidestep Knuckles' punch and get a lock on his arm. You try to force him to the ground. He continues to lash out at your legs and stomach. Continue the combat, but give Knuckles a penalty dice for the remainder of the fight. You may attempt a further combat manoeuvre to restrain Knuckles completely.",
         "choices": [{"goto": 67}]
     },
     60: {
-        "text": "You flex your injured hand and grimace at the surge of pain. You should probably apply ice to stop it swelling, but none is available while you squat here on the paving of a stranger's back garden. The sooner you can deal with this situation, the sooner you can get the injury looked at. You press on from garden to garden, counting the fences until you are level with Mrs Fellaman's flat. Until you leave Prince of Wales Road, you must add a penalty die to your Fighting rolls.",
-        "choices": [{"goto": 65}]
+        "text": "You flex your injured hand and grimace at the surge of pain. You should probably apply ice to stop it swelling, but none is available while you squat here on the paving of a stranger's back garden. The sooner you can deal with this situation, the sooner you can get the injury looked at. You press on from garden to garden, counting the fences until you are level with Mrs Fellaman's flat. Until you leave Prince of Wales Road, you must add a penalty dice to your Fighting rolls.",
+        "choices": [{"goto": 65, "effects": [{"action": "apply_penalty", "skill": "Fighting", "duration": "scene"}]}]
     },
     61: {
         "text": "You glance at the neighbouring properties in the manner of one who is concerned about confidentiality. The silence stretches out. Mrs Fellaman gives you the kind of stare perfected by those with a preference for marmalade sandwiches. She shows no inclination whatsoever to relocate the conversation.",
@@ -266,15 +410,57 @@ PAGES = {
     },
     67: {
         "text": "Knuckles spits, breathing hard. You are not the easy victim he expected. Continue the combat. If your opponent was the last person to take their action, it is now your turn and vice versa. Knuckles' Fighting skill is 40/20. On your turn, decide whether you want to damage your opponent or restrain him. On his turn, Knuckles tries to damage you. Carry out an opposed Fighting roll.",
-        "choices": [{"opposed_roll": "Fighting", "win_restrain": 43, "win_damage": 62, "lose": 89}]
+        "choices": [
+            {
+                "text": "Attack (Damage)",
+                "opposed_roll": "Fighting",
+                "opponent_skill": {"full": 40, "half": 20},
+                "outcomes": {
+                    "win": {"goto": 62},
+                    "lose": {"goto": 89, "effects": [{"action": "take_damage", "amount": 1}]},
+                    "draw": {"goto": 89}
+                }
+            },
+            {
+                "text": "Try to immobilize (Restrain)",
+                "opposed_roll": "Fighting",
+                "opponent_skill": {"full": 40, "half": 20},
+                "outcomes": {
+                    "win": {"goto": 43},
+                    "lose": {"goto": 89, "effects": [{"action": "take_damage", "amount": 1}]},
+                    "draw": {"goto": 89}
+                }
+            }
+        ]
     },
     68: {
         "text": "You don't move fast enough. As its limbs splay in mid-air, you identify a Yorkshire terrier, with a face constructed from a shaggy nightmare. It clips your ribs and knocks you spinning. Pain flares up your leg as you get to your feet. You were knocked prone by the dog's attack. This leaves you particularly vulnerable to further attacks. However, when it is your turn to act, you may stand up as a free action.",
         "choices": [{"goto": 77}]
     },
     69: {
-        "text": "You concentrate on fixing the hammer in space. \"Scindere!\" Spend 1 magic point. If you want to boost the spell for greater effect, spend 1 additional magic point. Update your current magic points accordingly. Make a Magic skill roll. Since you have mastered Scindere, you may have a bonus die.",
-        "choices": [{"roll": "Magic (com dado de bônus)", "success_boosted": 80, "success": 86, "failure": 97}]
+        "text": "You concentrate on fixing the hammer in space. \"Scindere!\" Spend 1 magic point. If you want to boost the spell for greater effect, spend 1 additional magic point. Update your current magic points accordingly. Make a Magic skill roll. Since you have mastered Scindere, you may have a bonus dice.",
+        "choices": [{
+            "text": "Cast Scindere",
+            "effects": [{"action": "spend_magic", "amount": 1}],
+            "roll": "Magic",
+            "bonus_dice": True,
+            "results": {
+                "3": {"goto": 86},
+                "2": {"goto": 97},
+                "1": {"goto": 97}
+            }
+        },
+        {
+            "text": "Cast Scindere (Boosted)",
+            "effects": [{"action": "spend_magic", "amount": 2}],
+            "roll": "Magic",
+            "bonus_dice": True,
+            "results": {
+                "3": {"goto": 80},
+                "2": {"goto": 97},
+                "1": {"goto": 97}
+            }
+        }]
     },
     70: {
         "text": "This may not be the most professional move of your career. However, it might put some distance between the householder and whatever has manifested inside her residence. Looking around for a hiding place, you consider the steps above her door, which lead to the flats above. You would be in plain sight, but only if Mrs Fellaman looks directly up. Worth a try. From inside, you hear another plate smash. You rap on the window then flee up the stairs. You have barely reached your refuge when Mrs Fellaman bursts from the door, moving faster than you expected. She appears to have a cricket bat.",
@@ -294,7 +480,17 @@ PAGES = {
     },
     74: {
         "text": "Mrs Fellaman steps up to the pavement, brandishing her willow-and-linseed-oil weapon with serious intent. \"I told you boys I'm not paying!\" she yells, scanning in both directions. A passing cyclist swerves, narrowly missing the Escort. She notices Ernie and steps closer to the car, eyeing the hairy terror. For a moment you visualise the paperwork that will result if the pensioner you were supposed to be protecting initiated an armed brawl with a stray dog you had acquired. Then she turns around and spots you on the stairs. Her jaw sets.",
-        "choices": [{"text": "Se você é Assistente Social", "goto": 79}, {"roll": "Social", "hard_success": 83, "success": 87, "failure": 91}]
+        "choices": [{"text": "Se você é Assistente Social", "goto": 79}, 
+        {
+            "roll": "Social",
+            "results": {
+                "5": {"goto": 83},
+                "4": {"goto": 83},
+                "3": {"goto": 87},
+                "2": {"goto": 91},
+                "1": {"goto": 91}
+            }
+        }]
     },
     75: {
         "text": "Confusion breaks across Knuckles' face as the spell takes hold and the hammer locks into place in the air.",
@@ -322,7 +518,13 @@ PAGES = {
     },
     81: {
         "text": "The Ford Escort you are using on this occasion does not have the stock of blank badges you use on NHS (National Health Service) business. You go through your pockets for a spare. The warden watches you search. \"It needs to display the address or it's not valid,\" she comments unnecessarily. You are going to make a Luck roll.",
-        "choices": [{"luck_roll": True, "success": 90, "failure": 94}]
+        "choices": [{
+            "luck_roll": True,
+            "results": {
+                "3": {"goto": 90},
+                "2": {"goto": 94}
+            }
+        }]
     },
     82: {
         "text": "You insist to Mrs Fellaman that you would like to come in and talk about the previous night's disturbance. She remains in the doorway. \"I've already spoke to the other copper,\" she says. By this she means the sergeant whose perceptive report led to your involvement. You try again to invite yourself into the house. Mrs Fellaman plants her feet and folds her arms.",
@@ -338,15 +540,56 @@ PAGES = {
     },
     85: {
         "text": "You display the sausage and hold up a finger to indicate the terrier should behave. Your finger looks uncomfortably like a second sausage. Subtract 10 points from your current Luck. You will use your Intelligence (INT) or Power (POW) characteristic (whichever is highest) to attempt Animal Handling, even though you don't possess this expert skill. Try Your Luck by making a Hard roll against INT or POW (whichever is highest).",
-        "choices": [{"roll": "Hard INT ou POW", "success": 92, "failure": 98}]
+        "choices": [
+            {
+                "text": "Try Your Luck by making a Hard roll against INT.",
+                "effects": [{"action": "spend_luck", "amount": 10}],
+                "roll": {
+                    "skill": "INT",
+                    "difficulty": "hard",
+                    "results": {
+                        "5": 92,
+                        "4": 92,
+                        "3": 92,
+                        "2": 98,
+                        "1": 98
+                    }
+                }
+            },
+            {
+                "text": "Try Your Luck by making a Hard roll against POW.",
+                "effects": [{"action": "spend_luck", "amount": 10}],
+                "roll": {
+                    "skill": "POW",
+                    "difficulty": "hard",
+                    "results": {
+                        "5": 92,
+                        "4": 92,
+                        "3": 92,
+                        "2": 98,
+                        "1": 98
+                    }
+                }
+            }
+        ]
     },
     86: {
         "text": "Knuckles hauls at the hammer, unable to comprehend the force holding it frozen in space. He gives it a few more pulls before turning to face you. You have successfully disarmed your opponent.",
         "choices": [{"goto": 39}]
     },
     87: {
-        "text": "You try to reassure Mrs Fellaman that you have only her best interests at heart. She swings the bat at you, but you can see her rage and the strength behind each blow-dissipating. To dodge the cricket bat, make a Fighting roll. As Mrs Fellaman is conflicted about the fight, you may apply a bonus die to your roll.",
-        "choices": [{"roll": "Fighting (com dado de bônus)", "success": 96, "failure": 100}]
+        "text": "You try to reassure Mrs Fellaman that you have only her best interests at heart. She swings the bat at you, but you can see her rage and the strength behind each blow-dissipating. To dodge the cricket bat, make a Fighting roll. As Mrs Fellaman is conflicted about the fight, you may apply a bonus dice to your roll.",
+        "choices": [{
+            "roll": "Fighting",
+            "bonus_dice": True,
+            "results": {
+                "5": {"goto": 96},
+                "4": {"goto": 96},
+                "3": {"goto": 96},
+                "2": {"goto": 100},
+                "1": {"goto": 100}
+            }
+        }]
     },
     88: {
         "text": "\"I've got a pot on the stove,\" Mrs Fellaman says. You tell her that everybody is concerned about her safety. \"That's nice,\" she says. \"But it's my patience you should be worried about. That other copper looked all over the house, and she found nothing. Haven't you got anything better to do than harass an old age pensioner?\" You adopt a particularly patient tone while explaining you're there to help. \"I'm sick of your help,\" she says. \"Have you got a warrant or council notice or something?\" You admit that you have not. \"Then you can piss off,\" she says and closes the door in your face.",
@@ -366,7 +609,7 @@ PAGES = {
     },
     92: {
         "text": "The terrier's attitude improves significantly once it realises it can obtain a sausage for good behaviour. After a bit of initial skittering around and snarling, it sits up and waits, trembling as it eyes the meaty reward. Three hard-earned sausages later, the dog is calm and compliant. To permanently gain the Animal Handling expert skill at half the appropriate skill value, spend a further 10 points of Luck.",
-        "choices": [{"goto": 106}]
+        "choices": [{"goto": 106, "effects": [{"action": "spend_luck", "amount": 10}, {"action": "gain_skill", "skill": "Animal Handling"}]}]
     },
     93: {
         "text": "The man's eyes flicker to the werelight and then to Mrs Fellaman. He doesn't answer. You have fed him enough magic. Time to wind this up.",
@@ -390,7 +633,7 @@ PAGES = {
     },
     98: {
         "text": "The terrier's response is swift and overwhelming. As it charges, you whip the sausage out of reach-but it is not aiming for your paltry single sausage. Its jaws clamp around the entire bag of sausages and its weight drags you off balance. You stumble and your head crashes against the wall. As you thump to the ground, the bag gives way and artisan sausages spill across the yard. After 30 seconds of deep breathing and cold personal reflection to a soundtrack of tearing plastic and meaty guzzling, you sit up. Most of the sausages are gone. The dog, however, is calmer. It sniffs and watches you mop blood from your temple. You are Hurt.",
-        "choices": [{"goto": 106}]
+        "choices": [{"goto": 106, "effects": [{"action": "take_damage", "amount": 1}]}]
     },
     99: {
         "text": "You turn to see Mrs Fellaman swing a cricket bat into the face of the second invader. He drops like wet laundry. She studies him for a moment before delivering a single, considered kick to his groin. \"Get out of it,\" she says. \"You'll get your money when I've got it.\" He stumbles to the rear window and topples out into the night. You hear creaks and moans as he retraces his path through strangers' gardens. Mrs Fellaman looks up at you. \"My fault,\" she says. \"I get a little frisky sometimes on the gee-gees. I'm none too particular who I take a loan from.\" You'll have to decide what to do with Knuckles, who is currently groaning on the carpet. But that can wait for later.",
@@ -398,7 +641,7 @@ PAGES = {
     },
     100: {
         "text": "The cricket bat connects with your shoulder and slams you against the railing. Mrs Fellaman, at least, has the good manners to be appalled at what she has done. You take the bat from her hands and reassure her that no bones are broken. \"I just got my blood up,\" she says. \"Sorry about that. It wasn't really you I was mad at. I suppose you had better come in.\" You return to the flat together. You have suffered 1 damage and are Hurt. However, because the combat has ended, you immediately recover from your Hurt state.",
-        "choices": [{"goto": 10}]
+        "choices": [{"goto": 10, "effects": [{"action": "take_damage", "amount": 1}, {"action": "heal_damage", "amount": 1}]}]
     },
     101: {
         "text": "You ask the ghost what his mother's name is. He frowns and hesitates. \"What do you want to know for?\" he says. The hesitation tells you enough. You extinguish the werelight and \"Victor\" instantly fades to transparency. A whisper tickles the air. \"Martha.\" \"Bring him back,\" Mrs Fellaman says. You ask her if Victor's mother was named Martha. \"No.\" She looks sour. \"But he's dead. You're bound to forget-\" The back window shatters.",
@@ -414,7 +657,16 @@ PAGES = {
     },
     104: {
         "text": "Walking away from a ghostly manifestation in progress is not an option, and you seem to have exhausted all of your alternatives except one. You examine Mrs Fellaman's door and the Yale lock that secures it. A more experienced magician could simply carve out the cylinder, but you will have to do it the old-fashioned way. You get a run-up as best you can and shoulder the door. It flies open with a crack, admitting you into the flat's narrow hallway. As you turn to survey the interior, a strange disc tumbles through the air. By the time you recognise it as a dinner plate with decorative bird illustrations, it is dangerously close to your face. You duck. Make a Fighting roll. If you fail, suffer 1 damage and become Hurt.",
-        "choices": [{"roll": "Fighting", "failure_effect": "sofre 1 de dano (Hurt)", "goto": 108}]
+        "choices": [{
+            "roll": "Fighting",
+            "results": {
+                "5": {"goto": 108},
+                "4": {"goto": 108},
+                "3": {"goto": 108},
+                "2": {"goto": 108, "effects": [{"action": "take_damage", "amount": 1}]},
+                "1": {"goto": 108, "effects": [{"action": "take_damage", "amount": 1}]}
+            }
+        }]
     },
     105: {
         "text": "You kick Knuckles' ankles from beneath him, and his face hits the floor. Before he can wriggle out of it, you put a knee on his back and sling one cuff around his right wrist. A twist of the forearm brings the other wrist close enough to fasten the second cuff. Now to deal with the second assailant.",
@@ -434,7 +686,10 @@ PAGES = {
     },
     109: {
         "text": "You shoulder Knuckles away and scramble out of range. In the process, you place a foot wrong and tumble to one knee among the fragments of crockery. As you stand back up, Knuckles sneers and turns his attention to Mrs Fellaman. She confronts the two intruders alone, her gaze following the hammer. Knuckles glances at you. \"You still here?\" he says. \"Beat it.\" If you are still at full health, take 1 damage from your fall, and so mark the Hurt box on your character sheet. Otherwise, your injuries are minor.",
-        "choices": [{"text": "Fugir", "goto": 73}, {"text": "Voltar para defender a Sra. Fellaman", "goto": 34}]
+        "choices": [
+            {"text": "Fugir", "goto": 73, "effects": [{"action": "take_damage", "amount": 1, "condition": "full_health"}]},
+            {"text": "Voltar para defender a Sra. Fellaman", "goto": 34}
+        ]
     },
     110: {
         "text": "Mrs Fellaman is still holding a cricket bat spattered with fresh blood. She clicks her tongue and runs the bat's wooden surface under the cold tap. While she is distracted, you turn your attention back to her domestic ghost. Something bothers you about the wall where he appeared. You've been in flats built to the same plan, and they had a pantry alcove to the left of the bricked-up fireplace. \"What about my husband?\" Mrs Fellaman asks. Still eyeing the wall, you explain that you were briefed about her family history, and her husband left her 30 years ago. He is currently living in Prestatyn, Wales, with a woman named Blodwyn. \"I knew that.\" She dries the cricket bat with a dishtowel. \"I just assumed he'd died recently, got over the Welsh bint, and come back where he belongs.\" You report that, as of this morning, he was alive and well. \"Pity,\" she says.",
