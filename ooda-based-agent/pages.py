@@ -279,7 +279,7 @@ PAGES = {
     40: {
         "text": "A hairy missile with teeth launches from behind the bins. You throw yourself out of its path. Make a Dexterity (DEX) roll.",
         "choices": [{
-            "roll": "Dexterity (DEX)",
+            "roll": "DEX",
             "results": {
                 "5": {"goto": 58},
                 "4": {"goto": 58},
@@ -346,7 +346,8 @@ PAGES = {
     53: {
         "text": "You keep your eye on the dark recess behind the bins. Things seem to have quietened down. A shadow flops, the torn remains of a box catching an air current. Where is the creature that was enacting such loud violence a few seconds ago? A hairy missile with teeth erupts from the ground beside you. You throw yourself out of its path. Make a Hard Dexterity (DEX) roll.",
         "choices": [{
-            "roll": "Hard Dexterity (DEX)",
+            "roll": "DEX",
+            "difficulty": "hard",
             "results": {
                 "5": {"goto": 58},
                 "4": {"goto": 58},
@@ -541,34 +542,30 @@ PAGES = {
     85: {
         "text": "You display the sausage and hold up a finger to indicate the terrier should behave. Your finger looks uncomfortably like a second sausage. Subtract 10 points from your current Luck. You will use your Intelligence (INT) or Power (POW) characteristic (whichever is highest) to attempt Animal Handling, even though you don't possess this expert skill. Try Your Luck by making a Hard roll against INT or POW (whichever is highest).",
         "choices": [
-            {
+                      {
                 "text": "Try Your Luck by making a Hard roll against INT.",
-                "effects": [{"action": "spend_luck", "amount": 10}],
-                "roll": {
-                    "skill": "INT",
-                    "difficulty": "hard",
-                    "results": {
-                        "5": 92,
-                        "4": 92,
-                        "3": 92,
-                        "2": 98,
-                        "1": 98
-                    }
+                "effects": [{"action": "spend_luck", "amount": 1}],
+                "roll": "INT",
+                "difficulty": "hard",
+                "results": {
+                    "5": 92,
+                    "4": 92,
+                    "3": 92,
+                    "2": 98,
+                    "1": 98
                 }
             },
             {
                 "text": "Try Your Luck by making a Hard roll against POW.",
-                "effects": [{"action": "spend_luck", "amount": 10}],
-                "roll": {
-                    "skill": "POW",
-                    "difficulty": "hard",
-                    "results": {
-                        "5": 92,
-                        "4": 92,
-                        "3": 92,
-                        "2": 98,
-                        "1": 98
-                    }
+                "effects": [{"action": "spend_luck", "amount": 1}],
+                "roll": "POW",
+                "difficulty": "hard",
+                "results": {
+                    "5": 92,
+                    "4": 92,
+                    "3": 92,
+                    "2": 98,
+                    "1": 98                
                 }
             }
         ]
