@@ -1,146 +1,23 @@
 import random
 import pages
 from character import Character
-
-# Functions from the notebook
-
-def create_character_sheet():
-    """Cria um template para a ficha de personagem."""
-    return {
-        "info": {
-            "name": "Character Name",
-            "occupation": None,
-            "age": 30,
-            "backstory": ""
-        },
-        "contacts": {},
-        "case_files": [],
-        "magic": {"spells": [], "signare": []},
-        "characteristics": {
-            "STR": {"full": 0, "half": 0}, "CON": {"full": 0, "half": 0},
-            "DEX": {"full": 0, "half": 0}, "INT": {"full": 0, "half": 0},
-            "POW": {"full": 0, "half": 0}
-        },
-        "resources": {
-            "luck": {"starting": 0, "current": 0},
-            "magic_pts": {"starting": 0, "current": 0},
-            "mov": 8
-        },
-        "skills": {
-            "common": {
-                "Athletics": {"full": 30, "half": 15}, "Drive": {"full": 30, "half": 15},
-                "Navigate": {"full": 30, "half": 15}, "Observation": {"full": 30, "half": 15},
-                "Read Person": {"full": 30, "half": 15}, "Research": {"full": 30, "half": 15},
-                "Social": {"full": 30, "half": 15}, "Stealth": {"full": 30, "half": 15},
-            },
-            "combat": {
-                "Fighting": {"full": 30, "half": 15}, "Firearms": {"full": 30, "half": 15}
-            },
-            "expert": {}
-        },
-        "status": {
-            "damage_levels": ["Healthy", "Hurt", "Bloodied", "Down", "Impaired"], #0 for healthy, 1 for Hurt, 2 for Bloodied, 3 for Down, 4 for Impaired
-            "damage_taken": 0,
-            "modifiers": []  # e.g., {"skill": "Fighting", "type": "penalty_dice", "duration": "scene"}
-        },
-        "inventory": {"equipment": [], "weapons": []},
-        "page_history": []
-    }
-
-def setup_character(sheet, name, occupation, backstory):
-    """Configura a ficha de personagem com base na ocupação e história."""
-    sheet["info"]["name"] = name
-    sheet["info"]["occupation"] = occupation
-    sheet["info"]["backstory"] = backstory
-
-    # Define a sorte inicial do personagem
-    luck_roll = random.randint(1, 10) + random.randint(1, 10) + 50
-    sheet["resources"]["luck"]["starting"] = luck_roll
-    sheet["resources"]["luck"]["current"] = luck_roll
-
-    # Define os pontos full e half das características como DEX, INT, POW, STR, CON
-    sheet["characteristics"]["DEX"]["full"] = random.randint(1, 10) + 50
-    sheet["characteristics"]["DEX"]["half"] = sheet["characteristics"]["DEX"]["full"] // 2
-    sheet["characteristics"]["INT"]["full"] = random.randint(1, 10) + 50
-    sheet["characteristics"]["INT"]["half"] = sheet["characteristics"]["INT"]["full"] // 2
-    sheet["characteristics"]["POW"]["full"] = random.randint(1, 10) + 50
-    sheet["characteristics"]["POW"]["half"] = sheet["characteristics"]["POW"]["full"] // 2
-    sheet["characteristics"]["STR"]["full"] = random.randint(1, 10) + 50
-    sheet["characteristics"]["STR"]["half"] = sheet["characteristics"]["STR"]["full"] // 2
-    sheet["characteristics"]["CON"]["full"] = random.randint(1, 10) + 50
-    sheet["characteristics"]["CON"]["half"] = sheet["characteristics"]["CON"]["full"] // 2
-
-
-    # Ajusta as perícias com base na ocupação
-    if occupation == "Police Officer":
-        for skill in ["Law", "Social", "Athletics", "Fighting"]:
-            if skill in sheet["skills"]["common"]:
-                sheet["skills"]["common"][skill] = {"full": 60, "half": 30}
-        sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
-        sheet["skills"]["expert"]["Law"] = {"full": 60, "half": 30}
-    elif occupation == "Social Worker":
-        for skill in ["Observation", "Research", "Social"]:
-            if skill in sheet["skills"]["common"]:
-                sheet["skills"]["common"][skill] = {"full": 60, "half": 30}
-        sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
-    elif occupation == "Nurse":
-        for skill in ["Observation", "Read Person", "Social"]:
-            if skill in sheet["skills"]["common"]:
-                sheet["skills"]["common"][skill] = {"full": 60, "half": 30}
-        sheet["skills"]["expert"]["Medicine"] = {"full": 60, "half": 30}
-        sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
-
-    return sheet
-
-def make_check(target_value, half_value, bonus_dice=False, penalty_dice=False):
-    """Realiza um teste de perícia D100 e retorna o nível de sucesso numérico."""
-    tens_roll_1 = random.randint(0, 9) * 10
-    tens_roll_2 = random.randint(0, 9) * 10
-    units_roll = random.randint(1, 10)
-
-    # Um dado de bônus e um dado de penalidade se anulam.
-    if bonus_dice and penalty_dice:
-        bonus_dice = False
-        penalty_dice = False
-
-    if bonus_dice:
-        final_tens = min(tens_roll_1, tens_roll_2)
-        print("Applied bonus die.")
-    elif penalty_dice:
-        final_tens = max(tens_roll_1, tens_roll_2)
-        print("Applied penalty die.")
-    else:
-        final_tens = tens_roll_1
-
-    # Calcula o resultado final da rolagem
-    if final_tens == 0 and units_roll == 10:
-        final_roll = 100
-    elif final_tens == 0:
-        final_roll = units_roll
-    else:
-        final_roll = final_tens + (units_roll % 10)
-
-    # Determina o nível de sucesso
-    if final_roll == 1:
-        return (5, final_roll)  # Critical Success
-    if final_roll == 100:
-        return (1, final_roll)  # Fumble
-    if final_roll <= half_value:
-        return (4, final_roll)  # Hard Success
-    if final_roll <= target_value:
-        return (3, final_roll)  # Success
-    
-    return (2, final_roll)  # Failure
-
-# Agent Class from the notebook
+from cockpit import GamePage
+from decision_controller import DecisionController, DecisionContext
+from default_decision_controller import DefaultDecisionController
 
 class Agent:
-    def __init__(self, name, occupation, game_instructions, game_data):
+    def __init__(self, name, occupation, game_instructions, game_data, decision_controller: DecisionController = None):
         # Refatorado para usar Character ao invés de create_character_sheet/setup_character
         self.character = Character(name, occupation, 30, game_instructions.get_backstory())
         self.game_data = game_data
         self.current_page = 1
         self.combat_status = {}
+        
+        # Injeção de dependência para controlador de decisão
+        self.decision_controller = decision_controller or DefaultDecisionController()
+        
+        # Criar instância da GamePage para visualização rica
+        self.game_page = GamePage(self.character, game_data)
 
     @property
     def sheet(self):
@@ -170,15 +47,34 @@ class Agent:
     def _llm_decide(self, choices):
         """
         Decide qual ação tomar com base nas opções e no estado do agente.
-        Esta versão usa uma lógica puramente declarativa baseada no campo 'requires'
-        e também trata escolhas condicionais baseadas na ocupação.
-        Inclui validações robustas para prevenir problemas com dados corrompidos.
+        Refatorado para usar injeção de dependência com DecisionController.
         """
         # VALIDAÇÃO CRÍTICA: Verificar se choices está em formato válido
         if not self._validate_choices(choices):
             print("ERRO CRÍTICO: Lista de choices inválida. Usando ação de fallback.")
             raise Exception("Invalid choices format")
         
+        # Criar contexto para o controller
+        context = DecisionContext(self.character, self.game_data, self.current_page)
+        
+        # Delegar decisão para o controller injetado
+        chosen_choice = self.decision_controller.decide(choices, context)
+        
+        # Exibir escolha formatada
+        if chosen_choice:
+            print("🎯 ESCOLHA DO MODELO (ESTRUTURADA):")
+            print("=" * 50)
+            for key, value in chosen_choice.items():
+                print(f"  {key}: {value}")
+            print("=" * 50)
+        
+        return chosen_choice
+    
+    # MÉTODO LEGACY - Mantido para referência, substituído por DecisionController
+    def _execute_decision_logic_LEGACY(self, choices):
+        """
+        Executa a lógica interna de decisão separada da visualização.
+        """
         choosen_choice = None
         
         try:
@@ -301,6 +197,10 @@ class Agent:
         # Fallback de segurança final
         print("ERRO: Nenhuma choice válida encontrada. Usando fallback de segurança.")
         return self._create_fallback_choice()
+
+    def _create_fallback_choice(self):
+        """Cria uma choice de segurança para situações de erro."""
+        return {"goto": 1, "text": "Fallback: Retornar ao início"}
 
     def _process_effects(self, effects):
         """
@@ -446,20 +346,16 @@ class Agent:
         """
         # VALIDAÇÃO CRÍTICA: Verificar se choice está em formato válido
         if not self._validate_choice(choice):
-            print("ERRO CRÍTICO: Choice inválida recebida do LLM. Usando ação padrão de segurança.")
-            # Ação de segurança: tentar navegar para página 1 ou manter página atual
-            self.sheet["info"]["backstory"].append(f"\nViolação de escolha detectada: {choice}. Escolha opção válida!")
-            return "Ação de segurança executada devido a choice inválida."
+            print("ERRO CRÍTICO: Choice inválida recebida do LLM")
+            raise ValueError(f"Choice inválida: {choice}")
         
         # VALIDAÇÃO DE CONDIÇÕES: Verificar se o LLM seguiu o path correto para sua ocupação
         page_data = self.game_data.get(self.current_page, {})
         available_choices = page_data.get("choices", [])
         
         if not self.verify_conditions(choice, available_choices):
-            print("ERRO: LLM violou condições de ocupação. Usando ação padrão de segurança.")
-            # Adicionar mensagem no backstory do agente para registrar a violação
-            self.sheet["info"]["backstory"].append(f"\nViolação de condições de ocupação detectada: {choice}")
-            return "Ação de segurança executada devido a violação de condições de ocupação."
+            print("ERRO: LLM violou condições de ocupação")
+            raise ValueError(f"Violação de condições de ocupação: {choice}")
         
         outcome = choice.get("outcome", "")
         
@@ -489,15 +385,13 @@ class Agent:
                     penalty_dice = roll_data.get("penalty_dice", False)
                     results = roll_data.get("results", {})
                 else:
-                    print(f"ERRO: Formato de 'roll' inválido: {roll_data}. Usando valores padrão.")
-                    self.sheet["info"]["backstory"].append(f"\nViolação de formato de roll detectada: {roll_data}. Use valores fornecidos.")
-                    return "Ação de segurança executada devido a formato inválido de roll."
+                    print(f"ERRO: Formato de 'roll' inválido: {roll_data}")
+                    raise ValueError(f"Formato de 'roll' inválido: {roll_data}. Deve ser string ou dicionário.")
 
                 # Validar skill_name
                 if not skill_name or not isinstance(skill_name, str):
-                    print(f"ERRO: Nome de perícia inválido: {skill_name}. Escolha uma perícia válida.'.")
-                    self.character.sheet["info"]["backstory"] += f"\nViolação de nome de perícia detectada: {skill_name}. Use perícia válida."
-                    return "Ação de segurança executada devido a perícia inválida."
+                    print(f"ERRO: Nome de perícia inválido: {skill_name}")
+                    raise ValueError(f"Nome de perícia inválido: {skill_name}. Deve ser uma string válida.")
 
                 # Validar difficulty
                 if difficulty not in ["normal", "hard"]:
@@ -514,43 +408,46 @@ class Agent:
                 penalty_dice = bool(penalty_dice) if isinstance(penalty_dice, (bool, int)) else False
 
                 # Usar o método robusto da classe Character para rolagens
+                roll_result = None
                 try:
                     # Tentar como habilidade primeiro
                     for skill_type in ["common", "combat", "expert"]:
-                        try:
-                            roll_result = self.character.roll_skill(
-                                skill_name, skill_type, 
-                                bonus_dice=bonus_dice, 
-                                penalty_dice=penalty_dice,
-                                difficulty=character_difficulty,
-                                auto_apply_modifiers=True
-                            )
+                        roll_result = self.character.roll_skill(
+                            skill_name, skill_type, 
+                            bonus_dice=bonus_dice, 
+                            penalty_dice=penalty_dice,
+                            difficulty=character_difficulty,
+                            auto_apply_modifiers=True
+                        )
+                        if roll_result.get("success", False):
                             break
-                        except KeyError:
-                            continue
                     else:
                         # Se não encontrar como habilidade, tentar como característica
-                        try:
-                            roll_result = self.character.roll_characteristic(
-                                skill_name,
-                                bonus_dice=bonus_dice,
-                                penalty_dice=penalty_dice,
-                                difficulty=character_difficulty
-                            )
-                        except KeyError:
+                        roll_result = self.character.roll_characteristic(
+                            skill_name,
+                            bonus_dice=bonus_dice,
+                            penalty_dice=penalty_dice,
+                            difficulty=character_difficulty
+                        )
+                        if not roll_result.get("success", False):
                             print(f"ERRO: '{skill_name}' não encontrado como habilidade ou característica.")
-                            return "Ação de segurança executada devido a perícia inexistente."
+                            raise Exception(f"'{skill_name}' not found as skill or characteristic")
+                    
+                    # Verificar se roll_result foi bem-sucedido
+                    if not roll_result.get("success", False):
+                        print(f"ERRO: Failed to roll for '{skill_name}': {roll_result.get('error', 'Unknown error')}")
+                        raise Exception(f"Failed to roll for '{skill_name}'")
                     
                     # Extrair informações do resultado
                     level = roll_result["level"]
                     roll_value = roll_result["roll"]
-                    target_value = roll_result["target_value"]
+                    target_value = roll_result["target"]
                     
                     print(f"Rolled {skill_name}: {roll_value} vs {target_value} -> Level {level}")
                     
                 except Exception as e:
                     print(f"ERRO na rolagem: {e}")
-                    return "Ação de segurança executada devido a erro na rolagem."
+                    raise Exception(f"Erro na rolagem: {e}")
 
                 # Processa os resultados baseados no nível de sucesso
                 if not isinstance(results, dict):
@@ -592,13 +489,13 @@ class Agent:
                     # Extrair informações do resultado
                     level = roll_result["level"]
                     roll_value = roll_result["roll"]
-                    luck_value = roll_result["target_value"]
+                    luck_value = roll_result["target"]
                     
                     print(f"Rolled Luck: {roll_value} vs {luck_value} -> Level {level}")
                     
                 except Exception as e:
                     print(f"ERRO na rolagem de sorte: {e}")
-                    return "Ação de segurança executada devido a erro na rolagem de sorte."
+                    raise Exception(f"Erro na rolagem de sorte: {e}")
                 
                 # Processa o resultado da rolagem de sorte
                 results = choice.get("results", {})
@@ -643,6 +540,7 @@ class Agent:
                     return outcome
 
                 # Usar o método robusto da classe Character para teste oposto
+                roll_result = None
                 try:
                     roll_result = self.character.opposed_roll(
                         skill_to_roll, 
@@ -650,6 +548,8 @@ class Agent:
                         opponent_skill["full"],
                         opponent_skill["half"]
                     )
+                    if not roll_result.get("success", False):
+                        raise KeyError(f"Failed to roll {skill_to_roll} as common skill")
                 except KeyError:
                     # Se não estiver em common, tentar combat
                     try:
@@ -659,6 +559,8 @@ class Agent:
                             opponent_skill["full"],
                             opponent_skill["half"]
                         )
+                        if not roll_result.get("success", False):
+                            raise KeyError(f"Failed to roll {skill_to_roll} as combat skill")
                     except KeyError:
                         # Se não estiver em combat, tentar expert
                         try:
@@ -668,16 +570,22 @@ class Agent:
                                 opponent_skill["full"],
                                 opponent_skill["half"]
                             )
+                            if not roll_result.get("success", False):
+                                raise KeyError(f"Failed to roll {skill_to_roll} as expert skill")
                         except KeyError:
                             print(f"ERRO: Perícia '{skill_to_roll}' não encontrada para teste oposto.")
-                            return "Ação de segurança executada devido a perícia inexistente em teste oposto."
+                            raise KeyError(f"Perícia '{skill_to_roll}' não encontrada para teste oposto.")
+                
+                if not roll_result or not roll_result.get("success", False):
+                    print(f"ERRO: Falha na rolagem oposta: {roll_result}")
+                    raise Exception(f"Falha na rolagem oposta para {skill_to_roll}")
                 
                 # Extrair informações do resultado
                 result_key = roll_result["outcome"]  # "win", "lose", "draw"
-                agent_level = roll_result["my_result"]["level"]
-                agent_roll = roll_result["my_result"]["roll"]
-                opponent_level = roll_result["opponent_level"]
-                opponent_roll = roll_result["opponent_roll"]
+                agent_level = roll_result["my_roll"]["level"]
+                agent_roll = roll_result["my_roll"]["roll"]
+                opponent_level = roll_result["opponent_roll"]["level"]
+                opponent_roll = roll_result["opponent_roll"]["roll"]
                 
                 print(f"Agente Rolled {skill_to_roll}: {agent_roll} -> Level {agent_level}")
                 print(f"Oponente Rolled: {opponent_roll} -> Level {opponent_level}")
@@ -730,10 +638,21 @@ class Agent:
             
             # 3. Decide
             chosen_action = self._llm_decide(choices)
-            print(f"Agente escolheu: {chosen_action}")        
+            print(f"Agente escolheu: {chosen_action}")
+            
             # 4. Act
             outcome = self.perform_action(chosen_action)
             print(f"Resultado: {outcome}\n---")
+            
+            # 5. Record - Registrar escolha no histórico detalhado
+            choice_index = None
+            for i, choice in enumerate(choices):
+                if choice == chosen_action:
+                    choice_index = i
+                    break
+            
+            self._record_choice_in_history(page_text, chosen_action, choice_index, outcome)
+            
             # Condição de parada
             if self.current_page == 0:
                 print("Fim da história (goto: 0).")
@@ -741,78 +660,74 @@ class Agent:
 
     def _observe(self):
         """
-        Observa o ambiente, lendo o texto e as opções da página atual.
+        Observa o ambiente usando GamePage para visualização rica.
+        Exibe o cockpit completo enviado ao modelo e retorna choices estruturadas.
         """
+        # Configurar a página atual na GamePage
+        self.game_page.set_current_page(self.current_page)
+        
+        # Gerar prompt rico usando GamePage
+        prompt = self.game_page.generate_prompt()
+        
+        # Exibir visualização rica
+        print("=" * 80)
+        print("📱 COCKPIT ENVIADO AO MODELO:")
+        print("=" * 80)
+        print(prompt)
+        print("=" * 80)
+        
+        # Obter dados da página atual
         page_data = self.game_data.get(self.current_page, {})
         page_text = page_data.get("text", "Página não encontrada.")
         choices = page_data.get("choices", [])
         
-        damage = self.sheet["status"]["damage_taken"]
-        if damage >= len(self.sheet["status"]["damage_levels"]):
-            damage = len(self.sheet["status"]["damage_levels"]) - 1
-        print(f"---" + f" Página: {self.current_page} --- Status: {self.sheet['status']['damage_levels'][damage]}\n")
-        print(f"Page: {page_text}\n")
-        print(f"Escolhas disponíveis: {choices}")
+        # Exibir choices estruturadas
+        print("🎯 CHOICES DISPONÍVEIS (ESTRUTURADAS):")
+        for i, choice in enumerate(choices):
+            print(f"  [{i+1}] {choice}")
+        print("=" * 80)
+        
         return page_text, choices
 
     def _orient(self, page_text):
         """
         Orienta o agente, atualizando seu estado interno com base nas observações.
+        Integra com GamePage para histórico visual.
         """
-        # Adiciona a página atual ao histórico
-        if self.current_page not in self.sheet["page_history"]:
-            self.sheet["page_history"].append((self.current_page, page_text))
-        
+        # Exibir progresso visual
+        print("\n" + "=" * 80)
+        print("📍 PROGRESSO DA NAVEGAÇÃO:")
+        print(f"  Página atual: {self.current_page}")
+        print(f"  Total de páginas visitadas: {len([entry for entry in self.sheet['page_history'] if isinstance(entry, tuple)])}")
+        print("=" * 80 + "\n")
         # Futuramente, poderia usar um LLM para extrair contexto do page_text
         pass
 
-
-class GameInstructions:
-    def get_backstory(self):
-        return "Você é um agente OODA baseado em IA navegando por um livro-jogo de investigação policial. Seu objetivo é resolver o mistério, tomar decisões estratégicas e manter seu personagem vivo. Use suas habilidades de raciocínio, análise e tomada de decisão para progredir na história."
-
-class GameData:
-    def __init__(self):
-        self.pages = pages.PAGES
-    
-    def get(self, page_id, default=None):
-        return self.pages.get(page_id, default)
-
-if __name__ == "__main__":
-    game_instructions = GameInstructions()
-    game_data = GameData()
-
-    input("Pressione Enter para iniciar o próximo cenário de teste...\n")
-    # Scenario 1: Police Officer (default)
-    print("---" + " Running Scenario 1: Police Officer " + "---")
-    agent_police = Agent(
-        name="Alex", 
-        occupation="Police Officer", 
-        game_instructions=game_instructions, 
-        game_data=game_data
-    )
-    agent_police.run()
-    print("---" + " Scenario 1 Finished " + "---\n")
-    input("Pressione Enter para iniciar o próximo cenário de teste...\n")
-    # Scenario 2: Social Worker
-    print("---" + " Running Scenario 2: Social Worker " + "---")
-    agent_social = Agent(
-        name="Brenda", 
-        occupation="Social Worker", 
-        game_instructions=game_instructions, 
-        game_data=game_data
-    )
-    agent_social.run()
-    print("---" + " Scenario 2 Finished " + "---\n")
-
-    input("Pressione Enter para iniciar o próximo cenário de teste...\n")
-    # Scenario 3: Nurse
-    print("---" + " Running Scenario 3: Nurse " + "---")
-    agent_nurse = Agent(
-        name="Charles", 
-        occupation="Nurse", 
-        game_instructions=game_instructions, 
-        game_data=game_data
-    )
-    agent_nurse.run()
-    print("---" + " Scenario 3 Finished " + "---\n")
+    def _record_choice_in_history(self, page_text, chosen_choice, choice_index=None, outcome=None):
+        """
+        Registra a escolha feita no histórico detalhado usando Character.add_to_history().
+        
+        Args:
+            page_text: Texto da página onde a escolha foi feita
+            chosen_choice: Objeto choice escolhido
+            choice_index: Índice da escolha (opcional)
+            outcome: Resultado da ação executada (opcional)
+        """
+        # Criar choice expandida com resultado para o histórico
+        choice_with_outcome = chosen_choice.copy()
+        if outcome:
+            choice_with_outcome['executed_outcome'] = outcome
+        
+        # Adicionar ao histórico detalhado via Character
+        self.character.add_to_history(
+            page_id=self.current_page,
+            page_text=page_text[:200] + "..." if len(page_text) > 200 else page_text,
+            choice_made=choice_with_outcome,
+            choice_index=choice_index
+        )
+        
+        print("✅ ESCOLHA REGISTRADA NO HISTÓRICO DETALHADO")
+        print(f"  Página: {self.current_page}")
+        print(f"  Escolha: {chosen_choice.get('text', str(chosen_choice)[:50])}")
+        if outcome:
+            print(f"  Resultado: {outcome[:100]}...")

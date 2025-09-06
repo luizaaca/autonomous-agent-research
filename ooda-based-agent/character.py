@@ -92,83 +92,116 @@ class Character:
             "page_history": []
         }
     
-    def setup(self, name: str, occupation: Optional[str] = None, 
-              age: int = 30, backstory: str = "") -> None:
+    def setup(self, name: str, occupation: str, age: int = 30, backstory: str = ""):
         """
-        Configura a ficha de personagem com base nos parâmetros fornecidos.
+        Configura o personagem com informações básicas e ajusta atributos baseados na ocupação.
         
         Args:
             name: Nome do personagem
-            occupation: Ocupação do personagem
-            age: Idade do personagem
+            occupation: Ocupação/profissão do personagem
+            age: Idade do personagem (padrão: 30)
             backstory: História de fundo do personagem
         """
-        # Configurar informações básicas
-        self._sheet["info"]["name"] = name
-        self._sheet["info"]["occupation"] = occupation
-        self._sheet["info"]["age"] = age
-        self._sheet["info"]["backstory"] = backstory
+        # Configurações básicas
+        self.sheet["info"]["name"] = name
+        self.sheet["info"]["occupation"] = occupation
+        self.sheet["info"]["age"] = age
+        self.sheet["info"]["backstory"] = backstory
         
-        # Gerar sorte inicial
+        # Calcular e definir recursos iniciais
+        import random
+        
+        # Sorte inicial (2d10 + 50)
         luck_roll = random.randint(1, 10) + random.randint(1, 10) + 50
-        self._sheet["resources"]["luck"]["starting"] = luck_roll
-        self._sheet["resources"]["luck"]["current"] = luck_roll
+        self.sheet["resources"]["luck"]["starting"] = luck_roll
+        self.sheet["resources"]["luck"]["current"] = luck_roll
         
-        # Gerar características aleatórias
-        self._generate_characteristics()
+        # Magic Points iniciais baseados em POW (assumindo POW padrão de 60 para agentes)
+        default_pow = 60
+        magic_points = default_pow
+        self.sheet["resources"]["magic_pts"]["starting"] = magic_points
+        self.sheet["resources"]["magic_pts"]["current"] = magic_points
         
-        # Configurar habilidades baseadas na ocupação
-        if occupation:
-            self._setup_occupation_skills(occupation)
-    
-    def _generate_characteristics(self) -> None:
-        """Gera valores aleatórios para as características do personagem."""
-        for char_name in ["STR", "CON", "DEX", "INT", "POW"]:
-            full_value = random.randint(1, 10) + 50
-            half_value = full_value // 2
-            self._sheet["characteristics"][char_name] = {
-                "full": full_value,
-                "half": half_value
-            }
-    
-    def _setup_occupation_skills(self, occupation: str) -> None:
-        """
-        Configura as habilidades com base na ocupação escolhida.
-        
-        Args:
-            occupation: Ocupação do personagem
-        """
+        # Configurar características baseadas na ocupação
         if occupation == "Police Officer":
-            # Melhorar habilidades específicas da polícia
-            skill_improvements = ["Social", "Athletics", "Fighting"]
-            for skill in skill_improvements:
-                if skill in self._sheet["skills"]["common"]:
-                    self._sheet["skills"]["common"][skill] = {"full": 60, "half": 30}
+            # Características melhoradas para policial
+            self.sheet["characteristics"]["STR"] = {"full": 65, "half": 32}
+            self.sheet["characteristics"]["CON"] = {"full": 60, "half": 30}
+            self.sheet["characteristics"]["DEX"] = {"full": 55, "half": 27}
+            self.sheet["characteristics"]["INT"] = {"full": 55, "half": 27}
+            self.sheet["characteristics"]["POW"] = {"full": 60, "half": 30}
             
-            # Adicionar habilidades expert
-            self._sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
-            self._sheet["skills"]["expert"]["Law"] = {"full": 60, "half": 30}
+            # Ajustar magic points baseado no POW real
+            actual_pow = self.sheet["characteristics"]["POW"]["full"]
+            self.sheet["resources"]["magic_pts"]["starting"] = actual_pow
+            self.sheet["resources"]["magic_pts"]["current"] = actual_pow
+            
+            # Perícias aprimoradas para policial
+            self.sheet["skills"]["common"]["Athletics"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["common"]["Drive"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["common"]["Social"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["combat"]["Fighting"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["combat"]["Firearms"] = {"full": 60, "half": 30}
+            
+            # Perícias especializadas
+            self.sheet["skills"]["expert"]["Law"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
             
         elif occupation == "Social Worker":
-            # Melhorar habilidades do assistente social
-            skill_improvements = ["Observation", "Research", "Social"]
-            for skill in skill_improvements:
-                if skill in self._sheet["skills"]["common"]:
-                    self._sheet["skills"]["common"][skill] = {"full": 60, "half": 30}
+            # Características para assistente social
+            self.sheet["characteristics"]["STR"] = {"full": 50, "half": 25}
+            self.sheet["characteristics"]["CON"] = {"full": 55, "half": 27}
+            self.sheet["characteristics"]["DEX"] = {"full": 50, "half": 25}
+            self.sheet["characteristics"]["INT"] = {"full": 70, "half": 35}
+            self.sheet["characteristics"]["POW"] = {"full": 65, "half": 32}
             
-            # Adicionar habilidades expert
-            self._sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
+            # Ajustar magic points baseado no POW
+            actual_pow = self.sheet["characteristics"]["POW"]["full"]
+            self.sheet["resources"]["magic_pts"]["starting"] = actual_pow
+            self.sheet["resources"]["magic_pts"]["current"] = actual_pow
+            
+            # Perícias aprimoradas
+            self.sheet["skills"]["common"]["Observation"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["common"]["Research"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["common"]["Social"] = {"full": 70, "half": 35}
+            self.sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
             
         elif occupation == "Nurse":
-            # Melhorar habilidades do enfermeiro
-            skill_improvements = ["Observation", "Read Person", "Social"]
-            for skill in skill_improvements:
-                if skill in self._sheet["skills"]["common"]:
-                    self._sheet["skills"]["common"][skill] = {"full": 60, "half": 30}
+            # Características para enfermeiro/a
+            self.sheet["characteristics"]["STR"] = {"full": 50, "half": 25}
+            self.sheet["characteristics"]["CON"] = {"full": 60, "half": 30}
+            self.sheet["characteristics"]["DEX"] = {"full": 60, "half": 30}
+            self.sheet["characteristics"]["INT"] = {"full": 65, "half": 32}
+            self.sheet["characteristics"]["POW"] = {"full": 60, "half": 30}
             
-            # Adicionar habilidades expert
-            self._sheet["skills"]["expert"]["Medicine"] = {"full": 60, "half": 30}
-            self._sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
+            # Ajustar magic points baseado no POW
+            actual_pow = self.sheet["characteristics"]["POW"]["full"]
+            self.sheet["resources"]["magic_pts"]["starting"] = actual_pow
+            self.sheet["resources"]["magic_pts"]["current"] = actual_pow
+            
+            # Perícias aprimoradas
+            self.sheet["skills"]["common"]["Observation"] = {"full": 70, "half": 35}
+            self.sheet["skills"]["common"]["Read Person"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["common"]["Social"] = {"full": 60, "half": 30}
+            self.sheet["skills"]["expert"]["Medicine"] = {"full": 70, "half": 35}
+            self.sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
+        
+        else:
+            # Ocupação genérica - valores padrão
+            self.sheet["characteristics"]["STR"] = {"full": 55, "half": 27}
+            self.sheet["characteristics"]["CON"] = {"full": 55, "half": 27}
+            self.sheet["characteristics"]["DEX"] = {"full": 55, "half": 27}
+            self.sheet["characteristics"]["INT"] = {"full": 55, "half": 27}
+            self.sheet["characteristics"]["POW"] = {"full": 55, "half": 27}
+            
+            # Magic points baseado no POW padrão
+            self.sheet["resources"]["magic_pts"]["starting"] = 55
+            self.sheet["resources"]["magic_pts"]["current"] = 55
+        
+        print(f"Character {name} ({occupation}) initialized successfully.")
+        print(f"Luck: {self.sheet['resources']['luck']['current']}")
+        print(f"Magic Points: {self.sheet['resources']['magic_pts']['current']}")
+        return True
     
     # Propriedades para acesso fácil aos dados principais
     @property

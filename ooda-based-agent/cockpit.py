@@ -34,13 +34,13 @@ class GamePage:
         """
         self.character = character
         self.pages_data = pages_data
-        self.current_page_id = None
+        self.current_page_number = None
         self.current_page_data = None
         
-    def set_current_page(self, page_id: int):
+    def set_current_page(self, page_number: int):
         """Define a página atual do jogo."""
-        self.current_page_id = page_id
-        self.current_page_data = self.pages_data.get(page_id, {})
+        self.current_page_number = page_number
+        self.current_page_data = self.pages_data.get(page_number, {})
         
     def render_header(self) -> str:
         """
@@ -180,7 +180,7 @@ INSTRUCTIONS:
             return "📍 CURRENT SITUATION\n└─ No current page data available"
             
         situation = f"""
-📍 CURRENT SITUATION - PAGE {self.current_page_id}
+📍 CURRENT SITUATION - PAGE {self.current_page_number}
 {'-' * 70}
 {self.current_page_data.get('text', 'No description available')}
 {'-' * 70}
@@ -201,56 +201,123 @@ INSTRUCTIONS:
                     
         return situation.strip()
     
-    def render_history(self, max_entries: int = 5) -> str:
+    def render_history(self, max_entries: int = 3) -> str:
         """
-        Renderiza o histórico de decisões anteriores.
-        
+        Renderiza o histórico de decisões em formato JSON estruturado
+    
         Args:
-            max_entries: Número máximo de entradas a mostrar
+            max_entries: Número máximo de entradas a exibir (padrão: 3)
             
         Returns:
-            String formatada com o histórico
+            String JSON formatada com o histórico das decisões
         """
         history = self.character.get_history()
         
         if not history:
-            return "📚 DECISION HISTORY\n└─ No previous decisions"
-            
-        history_section = "📚 DECISION HISTORY\n"
+            return json.dumps({
+                "history_summary": "Nenhuma decisão registrada ainda",
+                "total_decisions": 0,
+                "entries": []
+            }, indent=2, ensure_ascii=False)
+        
+        # Limitar o número de entradas
         recent_history = history[-max_entries:] if len(history) > max_entries else history
         
+        formatted_entries = []
+        
         for i, entry in enumerate(recent_history, 1):
+            # Verificar se é formato legado (tupla) ou novo formato (dict)
             if isinstance(entry, dict):
-                page_id = entry.get('page_id', 'Unknown')
-                choice = entry.get('choice_made', 'Unknown choice')
-                # Exibir o objeto choice completo
-                history_section += f"├─ Step {i}: Page {page_id} → {choice}\n"
+                # Formato novo: dicionário completo
+                page_number = entry.get('page_number', 0)
+                page_text = entry.get('page_text', '')
+                choice_made = entry.get('choice_made', {})
+                choice_index = entry.get('choice_index', 0)
+                original_choices = entry.get('original_choices', [])
             else:
-                history_section += f"├─ Step {i}: {entry}\n"
-                
-        history_section = history_section.rstrip('\n')
-        return history_section
+                # Formato desconhecido, pular
+                continue
 
-    def add_to_history(self, page_id: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None):
+            # Truncar texto da página nos últimos 50 caracteres
+            truncated_text = page_text[-50:] if len(page_text) > 50 else page_text
+
+            # Construir resultado da ação
+            action_result = {}
+            
+            # Adicionar outcome executado
+            if 'executed_outcome' in choice_made:
+                action_result['executed_outcome'] = choice_made['executed_outcome']
+            
+            # Adicionar resultados de roll
+            if 'roll_result' in choice_made:
+                action_result['roll_result'] = choice_made['roll_result']
+                action_result['skill_used'] = choice_made.get('skill_used', '')
+                action_result['target_value'] = choice_made.get('target_value', 0)
+                action_result['success'] = choice_made.get('success', False)
+            
+            # Adicionar resultados de opposite roll
+            if 'opposite_roll' in choice_made:
+                action_result['opposite_roll'] = choice_made['opposite_roll']
+            
+            # Adicionar efeitos aplicados
+            if 'effects_applied' in choice_made and choice_made['effects_applied']:
+                action_result['effects_applied'] = choice_made['effects_applied']
+            
+            # Adicionar goto executado
+            if 'goto_executed' in choice_made:
+                action_result['goto_executed'] = choice_made['goto_executed']
+            
+            # Limpar choice_made dos campos de resultado para separar decisão de execução
+            clean_choice = {k: v for k, v in choice_made.items() 
+                           if k not in ['executed_outcome', 'roll_result', 'skill_used', 
+                                       'target_value', 'success', 'opposite_roll', 
+                                       'effects_applied', 'goto_executed']}
+            
+            # Construir entrada formatada
+            formatted_entry = {
+                "step": i,
+                "page_number": page_number,
+                "page_text": truncated_text,
+                "original_choices": original_choices,
+                "choice_index": choice_index,
+                "choice_made": clean_choice if clean_choice else {"legacy_format": True}
+            }
+            
+            # Adicionar resultado da ação apenas se não estiver vazio
+            if action_result:
+                formatted_entry["action_result"] = action_result
+            
+            formatted_entries.append(formatted_entry)
+        
+        # Construir objeto final
+        history_json = {
+            "history_summary": f"Últimas {len(formatted_entries)} decisões do agente",
+            "total_decisions": len(history),
+            "entries": formatted_entries
+        }
+        
+        return json.dumps(history_json, indent=2, ensure_ascii=False)
+
+    def add_to_history(self, page_number: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None):
         """
         Adiciona uma entrada ao histórico de decisões.
         
         Args:
-            page_id: ID da página onde a decisão foi tomada
+            page_number: Numero da página onde a decisão foi tomada
             page_text: Texto da página onde a decisão foi tomada
             choice_made: Objeto choice completo que foi escolhido
             choice_index: Índice da escolha (opcional)
         """
-        self.character.add_to_history(page_id, page_text, choice_made, choice_index)
+        self.character.add_to_history(page_number, page_text, choice_made, choice_index)
 
         # Manter apenas as últimas 30 entradas para evitar overflow
         history = self.character.get_history()
-        if len(history) > 20:
+        if len(history) > 30:
             # Manter apenas as últimas 30 entradas
             self.character.clear_history()
             for entry in history[-30:]:
                 self.character.add_to_history(
-                    entry['page_id'],
+                    entry['page_number'],
                     entry['page_text'],
                     entry['choice_made'],
                     entry.get('choice_index')
@@ -306,7 +373,7 @@ INSTRUCTIONS:
         if not choices:
             return "No choices available (end state)"
             
-        summary = f"Page {self.current_page_id} has {len(choices)} choices:\n"
+        summary = f"Page {self.current_page_number} has {len(choices)} choices:\n"
         for i, choice in enumerate(choices, 1):
             if isinstance(choice, dict):
                 # Exibir o objeto choice completo para debug

@@ -621,3 +621,171 @@ O agente agora pode responder exatamente no formato esperado pelo sistema de pro
 **🎊 CONCLUSÃO: REFATORAÇÃO 100% COMPLETA E VALIDADA**
 
 O sistema agora possui uma arquitetura sólida, código limpo, alta manutenibilidade e está pronto para desenvolvimento futuro com uma base robusta e bem estruturada! 🚀
+### Limpeza de Código e Migração do Sistema de Rolagem (Setembro 2025)
+
+**Objetivo Concluído**: ✅ Remover funções obsoletas do main.py e documentar migração do sistema de rolagem de dados
+
+**Problema Identificado**: 
+- Funções antigas desnecessárias em `main.py` após separação Agent/Character
+- `create_character_sheet()`, `setup_character()`, `make_check()` duplicadas e não utilizadas
+- Sistema de rolagem migrado para classe Character sem documentação clara
+
+**Limpeza Realizada**:
+- **main.py limpo** - Removidas todas as funções obsoletas (create_character_sheet, setup_character, make_check)
+- **Imports simplificados** - Apenas `pages` e `Agent` necessários
+- **Código reduzido** - De ~150 linhas para ~30 linhas essenciais
+- **Responsabilidade única** - main.py agora apenas executa cenários de teste
+
+**📍 Localização Atual do Sistema de Rolagem: `character.py`**
+
+**Métodos de Rolagem Implementados:**
+- **`_make_d100_roll()`** - Sistema de rolagem D100 base com bonus/penalty dice
+- **`_evaluate_roll_result()`** - Avaliação de 5 níveis de sucesso
+- **`roll_skill()`** - Rolagem de habilidades (comum, combat, expert) 
+- **`roll_characteristic()`** - Rolagem de características (STR, DEX, etc.)
+- **`roll_luck()`** - Rolagem específica de sorte
+- **`opposed_roll()`** - Teste oposto entre personagem e NPC
+
+**🎯 Sistema D100 Completo:**
+- ✅ **Bonus dice** - rola 2 dados de dezena, usa o menor
+- ✅ **Penalty dice** - rola 2 dados de dezena, usa o maior  
+- ✅ **Cancelamento automático** - bonus + penalty = normal
+- ✅ **Valores especiais** - 01 (Critical) e 100 (Fumble)
+
+**🏆 5 Níveis de Sucesso:**
+- 🎯 **Critical Success (5)** - Rolagem 1
+- ⭐ **Hard Success (4)** - Rolagem ≤ half value
+- ✅ **Success (3)** - Rolagem ≤ full value  
+- ❌ **Failure (2)** - Rolagem > full value
+- 💥 **Fumble (1)** - Rolagem 100
+
+**🔧 Melhorias vs Sistema Antigo:**
+
+| **Antigo `make_check()`** | **Novo `roll_skill()`** |
+|---------------------------|-------------------------|
+| Função isolada | Método integrado na Character |
+| Parâmetros básicos | Interface completa orientada a objetos |
+| Return tuple simples | Return dict estruturado com detalhes |
+| Sem integração | Modificadores aplicados automaticamente |
+| Sem validação | Validação robusta de inputs |
+| Dificuldade hard manual | Dificuldade regular/hard automática |
+
+**🎮 Integração no Jogo:**
+- **Skill rolls**: `character.roll_skill('Fighting', bonus_dice=True)`
+- **Characteristic rolls**: `character.roll_characteristic('DEX')`  
+- **Opposed rolls**: `character.opposed_roll('Fighting', opponent_skill_full=40)`
+- **Luck rolls**: `character.roll_luck(penalty_dice=True)`
+
+**✨ Benefícios da Migração:**
+1. **Centralização** - Toda lógica de rolagem em um lugar
+2. **Robustez** - Validação e tratamento de erros completo
+3. **Flexibilidade** - Suporte para todos os tipos de teste do jogo
+4. **Integração** - Modificadores temporários aplicados automaticamente
+5. **Extensibilidade** - Fácil adicionar novos tipos de rolagem
+6. **Performance** - Return estruturado com todas as informações necessárias
+
+**Compatibilidade**: Sistema mantém 100% da funcionalidade original mas com interface moderna e capacidades expandidas.
+
+### Refatoração do Sistema de Decisão para Injeção de Dependência (Setembro 2025)
+
+**Objetivo**: Extrair a lógica de decisão do método `_execute_decision_logic()` para um serviço injetável, permitindo diferentes estratégias de decisão através de injeção de dependência.
+
+**Problema Identificado**: 
+- Lógica de decisão hardcoded no Agent (130+ linhas de código complexo)
+- Múltiplas responsabilidades misturadas (validação, condições, fallbacks)
+- Difícil testar e modificar comportamentos de decisão
+- Violação do princípio de responsabilidade única (Agent deveria focar no OODA loop)
+
+**Análise do Código Atual** (`_execute_decision_logic`):
+- **Validação de choices** - verificação de formato e tipos
+- **Lógica condicional** - choices baseadas em ocupação (`conditional_on`)
+- **Sistema de pré-requisitos** - avaliação de condições (`requires`)
+- **Configuração de ocupação** - handling de `set-occupation`
+- **Fallbacks múltiplos** - escolha padrão, primeira válida, fallback de segurança
+- **Validação de campos** - verificação de ações válidas (`goto`, `roll`, etc.)
+
+**Plano de Refatoração - 6 Etapas**:
+
+- [ ] **ETAPA 1: Criar interface DecisionController**
+  - Definir contrato abstrato para controladores de decisão
+  - Especificar métodos: `decide(choices, character, context)` 
+  - Definir estruturas de retorno padronizadas
+
+- [ ] **ETAPA 2: Implementar DefaultDecisionController**
+  - Migrar lógica atual do `_execute_decision_logic` para controller
+  - Manter comportamento idêntico (backward compatibility)
+  - Organizar código em métodos específicos por tipo de decisão
+
+- [ ] **ETAPA 3: Refatorar Agent para usar injeção de dependência**
+  - Adicionar `decision_controller` no construtor do Agent
+  - Modificar `_llm_decide()` para usar controller injetado
+  - Manter interface pública inalterada
+
+- [ ] **ETAPA 4: Criar DecisionContext para estado compartilhado**
+  - Encapsular informações necessárias (character, game_data, current_page)
+  - Simplificar interface entre Agent e DecisionController
+  - Melhorar testabilidade
+
+- [ ] **ETAPA 5: Implementar controllers alternativos**
+  - `RandomDecisionController` - escolhas aleatórias para teste
+  - `SimpleDecisionController` - lógica simplificada sem condições complexas
+  - `LLMDecisionController` - integração futura com LLMs reais
+
+- [ ] **ETAPA 6: Testes e validação**
+  - Testar comportamento idêntico com DefaultDecisionController
+  - Validar injeção de controllers alternativos
+  - Benchmarks de performance
+
+**Estrutura Proposta**:
+
+```python
+# Interface abstrata
+class DecisionController(ABC):
+    @abstractmethod
+    def decide(self, choices: List[Dict], context: DecisionContext) -> Dict:
+        pass
+
+# Contexto compartilhado
+class DecisionContext:
+    def __init__(self, character: Character, game_data: GameData, current_page: int):
+        self.character = character
+        self.game_data = game_data  
+        self.current_page = current_page
+
+# Implementação padrão
+class DefaultDecisionController(DecisionController):
+    def decide(self, choices: List[Dict], context: DecisionContext) -> Dict:
+        # Migrar lógica atual de _execute_decision_logic
+        pass
+
+# Agent refatorado
+class Agent:
+    def __init__(self, name, occupation, game_instructions, game_data, 
+                 decision_controller: DecisionController = None):
+        self.decision_controller = decision_controller or DefaultDecisionController()
+        # ... resto da inicialização
+
+    def _llm_decide(self, choices):
+        context = DecisionContext(self.character, self.game_data, self.current_page)
+        return self.decision_controller.decide(choices, context)
+```
+
+**Benefícios Esperados**:
+- **Separação de responsabilidades** - Agent foca no OODA, Controller na decisão
+- **Testabilidade** - controllers isolados são mais fáceis de testar
+- **Flexibilidade** - diferentes estratégias injetáveis em runtime
+- **Extensibilidade** - novos controllers sem modificar Agent
+- **Manutenibilidade** - lógica de decisão centralizada e organizada
+
+**Pontos de Atenção**:
+- **Backward compatibility** - manter comportamento exato do código atual
+- **Performance** - não introduzir overhead significativo
+- **Interface mínima** - evitar over-engineering da abstração
+- **Testabilidade** - garantir que mudanças sejam facilmente validáveis
+
+**Preparação para Aprovação**:
+Este plano mantém total compatibilidade com o código existente enquanto prepara a arquitetura para futuras extensões (LLM real, estratégias avançadas, etc.). A refatoração é incremental e cada etapa pode ser validada independentemente.
+
+**Status**: ⏳ **AGUARDANDO APROVAÇÃO PARA INICIAR IMPLEMENTAÇÃO**
+
+`````
