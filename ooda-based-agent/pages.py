@@ -7,7 +7,7 @@ PAGES = {
         "text": "The rush hour traffic begins to break as you chauffeur Ernie across Euston Road and back north. Somewhere near Mornington Crescent he starts snoring. You stop around the corner from Prince of Wales Road to pick up supplies. On your third circuit, a parking space opens up in front of Mrs Fellaman's flat and you cut up an aggrieved woman in a Chelsea tractor to secure the spot. It is seven o'clock. Around eight, Ernie stirs. You watch him closely, but the way he whines and paws the door suggests no magic is involved. He lets you attach the lead and take him down a cul-de-sac for a comfort break. You capture the results in a latex glove and dispose of them lawfully. Ernie is willing to return to the car, which has remarkably not been ticketed during your three-minute absence. He shows no particular interest in Mrs Fellaman's flat and nods off again. You settle in to continue the stakeout. Characters recover over time. If you were Hurt, you now return to normal; update your character sheet by erasing the \"Hurt\" mark.",
         "choices": [{
             "goto": 7,
-            "effects": [{"action": "heal_damage", "amount": 1}]
+            "effects": [{"action": "heal_damage", "amount": 4}]
         }]
     },
     3: {
@@ -71,7 +71,7 @@ PAGES = {
                     },
                     "default": {
                         "text": "Tentar usar sua força de vontade (não-policial)",
-                        "roll": "Power (POW)",
+                        "roll": "POW",
                         "results": {
                             "2": {"goto": 27},
                             "3": {"goto": 22}
@@ -200,7 +200,7 @@ PAGES = {
     32: {
         "text": "Knuckles opens his eyes wide in surprise as he is shoved by an invisible hand. The hammer drops from his grasp. Make a Power (POW) roll.",
         "choices": [{
-            "roll": "Power (POW)",
+            "roll": "POW",
             "results": {
                 "5": {"goto": 37},
                 "4": {"goto": 37},
@@ -382,7 +382,7 @@ PAGES = {
     },
     60: {
         "text": "You flex your injured hand and grimace at the surge of pain. You should probably apply ice to stop it swelling, but none is available while you squat here on the paving of a stranger's back garden. The sooner you can deal with this situation, the sooner you can get the injury looked at. You press on from garden to garden, counting the fences until you are level with Mrs Fellaman's flat. Until you leave Prince of Wales Road, you must add a penalty dice to your Fighting rolls.",
-        "choices": [{"goto": 65, "effects": [{"action": "apply_penalty", "skill": "Fighting", "duration": "scene"}]}]
+        "choices": [{"goto": 65, "effects": [{"action": "apply_penalty", "skill": "Fighting", "duration": 1}]}]
     },
     61: {
         "text": "You glance at the neighbouring properties in the manner of one who is concerned about confidentiality. The silence stretches out. Mrs Fellaman gives you the kind of stare perfected by those with a preference for marmalade sandwiches. She shows no inclination whatsoever to relocate the conversation.",
@@ -641,7 +641,7 @@ PAGES = {
     },
     100: {
         "text": "The cricket bat connects with your shoulder and slams you against the railing. Mrs Fellaman, at least, has the good manners to be appalled at what she has done. You take the bat from her hands and reassure her that no bones are broken. \"I just got my blood up,\" she says. \"Sorry about that. It wasn't really you I was mad at. I suppose you had better come in.\" You return to the flat together. You have suffered 1 damage and are Hurt. However, because the combat has ended, you immediately recover from your Hurt state.",
-        "choices": [{"goto": 10, "effects": [{"action": "take_damage", "amount": 1}, {"action": "heal_damage", "amount": 1}]}]
+        "choices": [{"goto": 10, "effects": [{"action": "take_damage", "amount": 1}, {"action": "heal_damage", "amount": 4}]}]
     },
     101: {
         "text": "You ask the ghost what his mother's name is. He frowns and hesitates. \"What do you want to know for?\" he says. The hesitation tells you enough. You extinguish the werelight and \"Victor\" instantly fades to transparency. A whisper tickles the air. \"Martha.\" \"Bring him back,\" Mrs Fellaman says. You ask her if Victor's mother was named Martha. \"No.\" She looks sour. \"But he's dead. You're bound to forget-\" The back window shatters.",
