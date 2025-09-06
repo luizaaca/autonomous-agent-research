@@ -57,13 +57,18 @@ def setup_character(sheet, name, occupation, backstory):
     sheet["resources"]["luck"]["starting"] = luck_roll
     sheet["resources"]["luck"]["current"] = luck_roll
 
-    # Define os pontos full e half das características como DEX, INT, POW
+    # Define os pontos full e half das características como DEX, INT, POW, STR, CON
     sheet["characteristics"]["DEX"]["full"] = random.randint(1, 10) + 50
     sheet["characteristics"]["DEX"]["half"] = sheet["characteristics"]["DEX"]["full"] // 2
     sheet["characteristics"]["INT"]["full"] = random.randint(1, 10) + 50
     sheet["characteristics"]["INT"]["half"] = sheet["characteristics"]["INT"]["full"] // 2
     sheet["characteristics"]["POW"]["full"] = random.randint(1, 10) + 50
     sheet["characteristics"]["POW"]["half"] = sheet["characteristics"]["POW"]["full"] // 2
+    sheet["characteristics"]["STR"]["full"] = random.randint(1, 10) + 50
+    sheet["characteristics"]["STR"]["half"] = sheet["characteristics"]["STR"]["full"] // 2
+    sheet["characteristics"]["CON"]["full"] = random.randint(1, 10) + 50
+    sheet["characteristics"]["CON"]["half"] = sheet["characteristics"]["CON"]["full"] // 2
+
 
     # Ajusta as perícias com base na ocupação
     if occupation == "Police Officer":
