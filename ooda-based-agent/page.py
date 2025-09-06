@@ -12,6 +12,7 @@ A estrutura é dividida em:
 
 from typing import Dict, List, Any, Optional
 import json
+from character import Character
 
 
 class GamePage:
@@ -23,15 +24,15 @@ class GamePage:
     e histórico de ações.
     """
     
-    def __init__(self, character_sheet: Dict[str, Any], pages_data: Dict[int, Dict]):
+    def __init__(self, character: Character, pages_data: Dict[int, Dict]):
         """
         Inicializa a página do jogo.
         
         Args:
-            character_sheet: Ficha completa do personagem
+            character: Instância da classe Character
             pages_data: Dicionário com todas as páginas do jogo
         """
-        self.character_sheet = character_sheet
+        self.character = character
         self.pages_data = pages_data
         self.current_page_id = None
         self.current_page_data = None
@@ -76,20 +77,18 @@ INSTRUCTIONS:
         Returns:
             String formatada com toda a ficha do personagem
         """
-        sheet = self.character_sheet
-        
-        # Informações básicas
+        # Informações básicas usando métodos da Character
         info_section = f"""
 📋 CHARACTER INFO
-├─ Name: {sheet['info']['name']}
-├─ Occupation: {sheet['info']['occupation']}
-└─ Age: {sheet['info']['age']}
+├─ Name: {self.character.name}
+├─ Occupation: {self.character.occupation}
+└─ Age: {self.character.age}
 """
         
-        # Status de saúde visual
-        damage_level = sheet['status']['damage_taken']
-        damage_labels = sheet['status']['damage_levels']
-        current_health = damage_labels[min(damage_level, len(damage_labels)-1)]
+        # Status de saúde usando o novo sistema
+        health_status = self.character.get_health_status()
+        current_health = health_status["current_level"]
+        damage_taken = health_status["damage_taken"]
         
         health_icons = {
             "Healthy": "💚",
@@ -101,40 +100,55 @@ INSTRUCTIONS:
         
         health_section = f"""
 ❤️  HEALTH STATUS
-└─ {health_icons.get(current_health, '❓')} {current_health} (Damage: {damage_level})
+└─ {health_icons.get(current_health, '❓')} {current_health} (Damage: {damage_taken})
 """
         
-        # Recursos
-        resources = sheet['resources']
+        # Recursos usando métodos da Character
+        luck_data = self.character.get_luck()
+        magic_data = self.character.get_magic_points()
         resources_section = f"""
 ⚡ RESOURCES
-├─ Luck: {resources['luck']['current']}/{resources['luck']['starting']}
-├─ Magic Points: {resources['magic_pts']['current']}/{resources['magic_pts']['starting']}
-└─ Movement: {resources['mov']}
+├─ Luck: {luck_data['current']}/{luck_data['starting']}
+├─ Magic Points: {magic_data['current']}/{magic_data['starting']}
+└─ Movement: 8
 """
         
-        # Características principais (atributos)
-        characteristics = sheet['characteristics']
+        # Características principais usando métodos da Character
         char_section = "📊 CHARACTERISTICS\n"
-        for char_name, char_data in characteristics.items():
-            char_section += f"├─ {char_name}: {char_data['full']} (Half: {char_data['half']})\n"
+        characteristics = ["STR", "CON", "DEX", "INT", "POW"]
+        for char_name in characteristics:
+            try:
+                char_data = self.character.get_characteristic(char_name)
+                char_section += f"├─ {char_name}: {char_data['full']} (Half: {char_data['half']})\n"
+            except KeyError:
+                continue
         char_section = char_section.rstrip('\n')
         
-        # Habilidades principais
+        # Habilidades principais usando métodos da Character
         skills_section = "🎯 KEY SKILLS\n"
-        common_skills = sheet['skills']['common']
-        for skill_name, skill_data in list(common_skills.items())[:6]:  # Top 6 skills
-            skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
+        
+        # Habilidades comuns (primeiras 6)
+        common_skill_names = ["Athletics", "Drive", "Navigate", "Observation", "Read Person", "Research"]
+        for skill_name in common_skill_names:
+            try:
+                skill_data = self.character.get_skill(skill_name, "common")
+                skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
+            except KeyError:
+                continue
         
         # Habilidades de combate
-        combat_skills = sheet['skills']['combat']
-        for skill_name, skill_data in combat_skills.items():
-            skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
+        combat_skill_names = ["Fighting", "Firearms"]
+        for skill_name in combat_skill_names:
+            try:
+                skill_data = self.character.get_skill(skill_name, "combat")
+                skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
+            except KeyError:
+                continue
             
         skills_section = skills_section.rstrip('\n')
         
-        # Inventário
-        inventory = sheet['inventory']
+        # Inventário usando métodos da Character
+        inventory = self.character.get_inventory()
         inventory_section = "🎒 INVENTORY\n"
         if inventory['equipment']:
             inventory_section += "├─ Equipment: " + ", ".join(inventory['equipment']) + "\n"
@@ -144,11 +158,12 @@ INSTRUCTIONS:
             inventory_section += "└─ Empty\n"
         inventory_section = inventory_section.rstrip('\n')
         
-        # Modificadores ativos
+        # Modificadores ativos usando métodos da Character
         modifiers_section = ""
-        if sheet['status']['modifiers']:
+        modifiers = self.character.get_modifiers()
+        if modifiers:
             modifiers_section = "⚠️  ACTIVE MODIFIERS\n"
-            for mod in sheet['status']['modifiers']:
+            for mod in modifiers:
                 modifiers_section += f"├─ {mod.get('skill', 'General')}: {mod.get('type', 'Unknown')} ({mod.get('duration', 'Unknown')})\n"
             modifiers_section = modifiers_section.rstrip('\n')
         
@@ -196,7 +211,7 @@ INSTRUCTIONS:
         Returns:
             String formatada com o histórico
         """
-        history = self.character_sheet.get('page_history', [])
+        history = self.character.get_history()
         
         if not history:
             return "📚 DECISION HISTORY\n└─ No previous decisions"
@@ -215,30 +230,31 @@ INSTRUCTIONS:
                 
         history_section = history_section.rstrip('\n')
         return history_section
-    
-    def add_to_history(self, page_id: int, choice_made: Dict[str, Any], choice_index: int = None):
+
+    def add_to_history(self, page_id: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None):
         """
         Adiciona uma entrada ao histórico de decisões.
         
         Args:
             page_id: ID da página onde a decisão foi tomada
+            page_text: Texto da página onde a decisão foi tomada
             choice_made: Objeto choice completo que foi escolhido
             choice_index: Índice da escolha (opcional)
         """
-        if 'page_history' not in self.character_sheet:
-            self.character_sheet['page_history'] = []
-            
-        history_entry = {
-            'page_id': page_id,
-            'choice_made': choice_made,
-            'choice_index': choice_index
-        }
-        
-        self.character_sheet['page_history'].append(history_entry)
-        
-        # Manter apenas as últimas 20 entradas para evitar overflow
-        if len(self.character_sheet['page_history']) > 20:
-            self.character_sheet['page_history'] = self.character_sheet['page_history'][-20:]
+        self.character.add_to_history(page_id, page_text, choice_made, choice_index)
+
+        # Manter apenas as últimas 30 entradas para evitar overflow
+        history = self.character.get_history()
+        if len(history) > 20:
+            # Manter apenas as últimas 30 entradas
+            self.character.clear_history()
+            for entry in history[-30:]:
+                self.character.add_to_history(
+                    entry['page_id'],
+                    entry['page_text'],
+                    entry['choice_made'],
+                    entry.get('choice_index')
+                )
     
     def generate_prompt(self) -> str:
         """
@@ -268,40 +284,13 @@ INSTRUCTIONS:
     
     def update_character_from_effects(self, effects: List[Dict[str, Any]]):
         """
-        Aplica efeitos à ficha do personagem.
+        Aplica efeitos à ficha do personagem usando os métodos da classe Character.
         
         Args:
             effects: Lista de efeitos a aplicar
         """
-        for effect in effects:
-            action = effect.get('action')
-            amount = effect.get('amount', 0)
-            
-            if action == 'take_damage':
-                self.character_sheet['status']['damage_taken'] += amount
-            elif action == 'heal_damage':
-                self.character_sheet['status']['damage_taken'] = max(0, 
-                    self.character_sheet['status']['damage_taken'] - amount)
-            elif action == 'spend_magic':
-                current_magic = self.character_sheet['resources']['magic_pts']['current']
-                self.character_sheet['resources']['magic_pts']['current'] = max(0, current_magic - amount)
-            elif action == 'spend_luck':
-                current_luck = self.character_sheet['resources']['luck']['current']
-                self.character_sheet['resources']['luck']['current'] = max(0, current_luck - amount)
-            elif action == 'gain_skill':
-                skill_name = effect.get('skill')
-                if skill_name and 'skills' in self.character_sheet:
-                    # Adicionar lógica para melhorar habilidades
-                    pass
-            elif action == 'apply_penalty':
-                # Adicionar modificador de penalidade
-                modifier = {
-                    'skill': effect.get('skill', 'General'),
-                    'type': 'penalty_dice',
-                    'duration': effect.get('duration', 'scene'),
-                    'amount': amount
-                }
-                self.character_sheet['status']['modifiers'].append(modifier)
+        result = self.character.apply_effects(effects)
+        return result
     
     def get_choice_summary(self) -> str:
         """
@@ -328,74 +317,14 @@ INSTRUCTIONS:
         return summary.strip()
 
 
-def create_character_sheet():
-    """
-    Cria um template para a ficha de personagem.
-    
-    Esta função mantém compatibilidade com o notebook avançado.
-    """
-    return {
-        "info": {
-            "name": "Agent",
-            "occupation": None,
-            "age": 30,
-            "backstory": ""
-        },
-        "contacts": {},
-        "case_files": [],
-        "magic": {"spells": [], "signare": []},
-        "characteristics": {
-            "STR": {"full": 0, "half": 0}, "CON": {"full": 0, "half": 0},
-            "DEX": {"full": 0, "half": 0}, "INT": {"full": 0, "half": 0},
-            "POW": {"full": 0, "half": 0}
-        },
-        "resources": {
-            "luck": {"starting": 0, "current": 0},
-            "magic_pts": {"starting": 0, "current": 0},
-            "mov": 8
-        },
-        "skills": {
-            "common": {
-                "Athletics": {"full": 30, "half": 15}, "Drive": {"full": 30, "half": 15},
-                "Navigate": {"full": 30, "half": 15}, "Observation": {"full": 30, "half": 15},
-                "Read Person": {"full": 30, "half": 15}, "Research": {"full": 30, "half": 15},
-                "Social": {"full": 30, "half": 15}, "Stealth": {"full": 30, "half": 15},
-            },
-            "combat": {
-                "Fighting": {"full": 30, "half": 15}, "Firearms": {"full": 30, "half": 15}
-            },
-            "expert": {}
-        },
-        "status": {
-            "damage_levels": ["Healthy", "Hurt", "Bloodied", "Down", "Impaired"],
-            "damage_taken": 0,
-            "modifiers": []
-        },
-        "inventory": {"equipment": [], "weapons": []},
-        "page_history": []
-    }
-
-
 # Exemplo de uso
 if __name__ == "__main__":
     # Demonstração básica da classe GamePage
     from pages import PAGES
     
-    # Criar ficha de personagem
-    character = create_character_sheet()
-    character["info"]["name"] = "Detective Smith"
-    character["info"]["occupation"] = "Police Officer"
-    character["resources"]["luck"]["starting"] = 65
-    character["resources"]["luck"]["current"] = 65
-    character["resources"]["magic_pts"]["starting"] = 10
-    character["resources"]["magic_pts"]["current"] = 10
-    
-    # Adicionar valores às características
-    character["characteristics"]["STR"] = {"full": 50, "half": 25}
-    character["characteristics"]["CON"] = {"full": 60, "half": 30}
-    character["characteristics"]["DEX"] = {"full": 70, "half": 35}
-    character["characteristics"]["INT"] = {"full": 80, "half": 40}
-    character["characteristics"]["POW"] = {"full": 55, "half": 27}
+    # Criar personagem usando a classe Character
+    character = Character()
+    character.setup("Detective Smith", "Police Officer", 35, "Experienced detective")
     
     # Criar página do jogo
     game_page = GamePage(character, PAGES)

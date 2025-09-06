@@ -1,5 +1,6 @@
 import random
 import pages
+from character import Character
 
 # Functions from the notebook
 
@@ -135,14 +136,19 @@ def make_check(target_value, half_value, bonus_dice=False, penalty_dice=False):
 
 class Agent:
     def __init__(self, name, occupation, game_instructions, game_data):
-        base_sheet = create_character_sheet()
-        self.sheet = setup_character(base_sheet, name, occupation, game_instructions.get_backstory())
+        # Refatorado para usar Character ao invés de create_character_sheet/setup_character
+        self.character = Character(name, occupation, 30, game_instructions.get_backstory())
         self.game_data = game_data
         self.current_page = 1
         self.combat_status = {}
 
+    @property
+    def sheet(self):
+        """Propriedade de compatibilidade para código que ainda acessa self.sheet"""
+        return self.character.sheet
+
     def __repr__(self):
-        return f"Agent(Name: {self.sheet['info']['name']}, Occupation: {self.sheet['info']['occupation']})"
+        return f"Agent(Name: {self.character.name}, Occupation: {self.character.occupation})"
 
     def _validate_choices(self, choices):
         """Valida se a lista de choices está em formato correto."""
@@ -297,55 +303,26 @@ class Agent:
         return self._create_fallback_choice()
 
     def _process_effects(self, effects):
-        """Processa uma lista de efeitos no estado do agente."""
+        """
+        Processa uma lista de efeitos no estado do agente.
+        Refatorado para usar character.apply_effects() ao invés de lógica manual.
+        """
         if not isinstance(effects, list):
             print(f"AVISO: 'effects' deve ser uma lista, recebido: {type(effects)}. Ignorando efeitos.")
             return
-            
-        for effect in effects:
-            if not isinstance(effect, dict):
-                print(f"AVISO: Efeito deve ser um dicionário, recebido: {type(effect)}. Pulando efeito.")
-                continue
-                
-            action = effect.get("action")
-            if not action:
-                print(f"AVISO: Efeito sem campo 'action': {effect}. Pulando efeito.")
-                continue
-                
-            if action == "spend_luck":
-                amount = effect.get("amount", 0)
-                if not isinstance(amount, (int, float)) or amount < 0:
-                    print(f"AVISO: Quantidade de sorte inválida: {amount}. Usando 0.")
-                    amount = 0
-                luck_amount = self.sheet["resources"]["luck"]["current"]
-                luck_amount = max(0, luck_amount - amount)
-                self.sheet["resources"]["luck"]["current"] = luck_amount
-                print(f"Spent {amount} luck. Current luck: {self.sheet['resources']['luck']['current']}")
-            elif action == "gain_skill":
-                skill = effect.get("skill")
-                if not skill or not isinstance(skill, str):
-                    print(f"AVISO: Nome de perícia inválido: {skill}. Pulando efeito.")
-                    continue
-                if skill not in self.sheet["skills"]["common"]:
-                    self.sheet["skills"]["common"][skill] = {"full": 60, "half": 30}
-                    print(f"Gained skill {skill}. Current level: {self.sheet['skills']['common'][skill]}")
-            elif action == "spend_magic":
-                amount = effect.get("amount", 0)
-                if not isinstance(amount, (int, float)) or amount < 0:
-                    print(f"AVISO: Quantidade de magia inválida: {amount}. Usando 0.")
-                    amount = 0
-                magic_amount = self.sheet["resources"]["magic_pts"]["current"]
-                magic_amount = max(0, magic_amount - amount)
-                self.sheet["resources"]["magic_pts"]["current"] = magic_amount
-                print(f"Spent {amount} magic points. Current magic points: {self.sheet['resources']['magic_pts']['current']}")
-            elif action == "apply_penalty":
-                self.apply_penalty(effect)
-            elif action == "heal_damage":
-                self.heal_status(effect)
-            elif action == "take_damage":
-                self.take_damage(effect)
-            else:
-                print(f"AVISO: Ação desconhecida '{action}' em efeito: {effect}. Pulando efeito.")
+        
+        # Usar o método robusto da classe Character
+        result = self.character.apply_effects(effects)
+        
+        # Log dos resultados para compatibilidade com comportamento anterior
+        if result['success']:
+            print(f"Aplicados {result['effects_applied']} efeitos com sucesso.")
+            if result['effects_failed'] > 0:
+                print(f"AVISO: {result['effects_failed']} efeitos falharam.")
+        else:
+            print(f"ERRO: Falha ao aplicar efeitos. {result['effects_failed']} efeitos falharam.")
+        
+        return result
 
     def _validate_choice(self, choice):
         """Valida se a choice retornada pelo LLM está em formato correto."""
@@ -409,8 +386,8 @@ class Agent:
         if not conditional_choice:
             return True
         
-        # Obtém a ocupação atual do agente
-        current_occupation = self.sheet["info"]["occupation"] or "default"
+        # Obtém a ocupação atual do agente (refatorado para usar Character)
+        current_occupation = self.character.occupation or "default"
         
         # Obtém os paths disponíveis
         paths = conditional_choice.get("paths", {})
@@ -519,62 +496,61 @@ class Agent:
                 # Validar skill_name
                 if not skill_name or not isinstance(skill_name, str):
                     print(f"ERRO: Nome de perícia inválido: {skill_name}. Escolha uma perícia válida.'.")
-                    self.sheet["info"]["backstory"].append(f"\nViolação de nome de perícia detectada: {skill_name}. Use perícia válida.")
+                    self.character.sheet["info"]["backstory"] += f"\nViolação de nome de perícia detectada: {skill_name}. Use perícia válida."
                     return "Ação de segurança executada devido a perícia inválida."
-
-                # Encontra a perícia na ficha do personagem
-                skill_values = None
-                if skill_name in self.sheet["skills"]["common"]:
-                    skill_values = self.sheet["skills"]["common"][skill_name]
-                elif skill_name in self.sheet["skills"]["combat"]:
-                    skill_values = self.sheet["skills"]["combat"][skill_name]
-                elif skill_name in self.sheet["skills"]["expert"]:
-                    skill_values = self.sheet["skills"]["expert"][skill_name]
-                else:
-                    # Para características como INT, DEX, etc.
-                    if skill_name in self.sheet["characteristics"]:
-                        char_value = self.sheet["characteristics"][skill_name]["full"]
-                        skill_values = {"full": char_value, "half": char_value // 2}
-                    else:
-                        print(f"Perícia '{skill_name}' não encontrada. Usando valores padrão.")
-                        skill_values = {"full": 30, "half": 15}
 
                 # Validar difficulty
                 if difficulty not in ["normal", "hard"]:
                     print(f"AVISO: Dificuldade inválida '{difficulty}'. Usando 'normal'.")
                     difficulty = "normal"
                 
-                # valor padrão
-                target_value = 33
-
-                # Ajusta valores baseados na dificuldade
-                if difficulty == "hard":
-                    target_value = skill_values["half"]
-                    half_value = target_value // 2
-                else:  # normal
-                    target_value = skill_values["full"]
-                    half_value = skill_values["half"]
-
-                print(f"Performing roll for skill '{skill_name}' with target {target_value} (difficulty: {difficulty})")
+                # Converter difficulty para formato da Character
+                character_difficulty = "regular" if difficulty == "normal" else "hard"
+                
+                print(f"Performing roll for skill '{skill_name}' with difficulty: {difficulty}")
                 
                 # Validar bonus_dice e penalty_dice
                 bonus_dice = bool(bonus_dice) if isinstance(bonus_dice, (bool, int)) else False
                 penalty_dice = bool(penalty_dice) if isinstance(penalty_dice, (bool, int)) else False
 
-                # Verifica se há penalidades ativas para esta perícia
-                has_penalty = any(
-                    mod.get("skill") == skill_name and mod.get("type") == "penalty_dice"
-                    for mod in self.sheet["status"]["modifiers"] if isinstance(mod, dict)
-                )
-
-                has_bonus = any(
-                    mod.get("skill") == skill_name and mod.get("type") == "bonus_dice"
-                    for mod in self.sheet["status"]["modifiers"] if isinstance(mod, dict)
-                )
-
-                # Realiza o teste
-                level, roll_value = make_check(target_value, half_value, bonus_dice=has_bonus, penalty_dice=has_penalty)
-                print(f"Rolled {skill_name}: {roll_value} vs {target_value} -> Level {level}")
+                # Usar o método robusto da classe Character para rolagens
+                try:
+                    # Tentar como habilidade primeiro
+                    for skill_type in ["common", "combat", "expert"]:
+                        try:
+                            roll_result = self.character.roll_skill(
+                                skill_name, skill_type, 
+                                bonus_dice=bonus_dice, 
+                                penalty_dice=penalty_dice,
+                                difficulty=character_difficulty,
+                                auto_apply_modifiers=True
+                            )
+                            break
+                        except KeyError:
+                            continue
+                    else:
+                        # Se não encontrar como habilidade, tentar como característica
+                        try:
+                            roll_result = self.character.roll_characteristic(
+                                skill_name,
+                                bonus_dice=bonus_dice,
+                                penalty_dice=penalty_dice,
+                                difficulty=character_difficulty
+                            )
+                        except KeyError:
+                            print(f"ERRO: '{skill_name}' não encontrado como habilidade ou característica.")
+                            return "Ação de segurança executada devido a perícia inexistente."
+                    
+                    # Extrair informações do resultado
+                    level = roll_result["level"]
+                    roll_value = roll_result["roll"]
+                    target_value = roll_result["target_value"]
+                    
+                    print(f"Rolled {skill_name}: {roll_value} vs {target_value} -> Level {level}")
+                    
+                except Exception as e:
+                    print(f"ERRO na rolagem: {e}")
+                    return "Ação de segurança executada devido a erro na rolagem."
 
                 # Processa os resultados baseados no nível de sucesso
                 if not isinstance(results, dict):
@@ -607,14 +583,22 @@ class Agent:
                 else:
                     print(f"AVISO: Nenhum resultado encontrado para nível {level}. Mantendo página atual.")
             
-            # 2.5. Executar rolagens de sorte (luck_roll)
+            # 2.5. Executar rolagens de sorte (luck_roll) - refatorado para usar Character
             elif "luck_roll" in choice and choice["luck_roll"]:
-                # Usa o valor atual de sorte do personagem
-                luck_value = self.sheet["resources"]["luck"]["current"]
-                luck_half = luck_value // 2
-                
-                # Realiza o teste de sorte
-                level, roll_value = make_check(luck_value, luck_half)
+                try:
+                    # Usar o método robusto da classe Character para rolagem de sorte
+                    roll_result = self.character.roll_luck()
+                    
+                    # Extrair informações do resultado
+                    level = roll_result["level"]
+                    roll_value = roll_result["roll"]
+                    luck_value = roll_result["target_value"]
+                    
+                    print(f"Rolled Luck: {roll_value} vs {luck_value} -> Level {level}")
+                    
+                except Exception as e:
+                    print(f"ERRO na rolagem de sorte: {e}")
+                    return "Ação de segurança executada devido a erro na rolagem de sorte."
                 
                 # Processa o resultado da rolagem de sorte
                 results = choice.get("results", {})
@@ -628,8 +612,6 @@ class Agent:
                         result = results.get(str(i))
                         if result:
                             break
-                
-                print(f"Rolled Luck: {roll_value} vs {luck_value} -> Level {level}")
                 
                 if result:
                     outcome = result.get("outcome", outcome)
@@ -660,52 +642,46 @@ class Agent:
                     print(f"ERRO: 'outcomes' deve ser um dicionário: {results}")
                     return outcome
 
-                # Encontra a perícia na ficha do personagem
-                skill_values = None
-                if skill_to_roll in self.sheet["skills"]["common"]:
-                    skill_values = self.sheet["skills"]["common"][skill_to_roll]
-                elif skill_to_roll in self.sheet["skills"]["combat"]:
-                    skill_values = self.sheet["skills"]["combat"][skill_to_roll]
-                elif skill_to_roll in self.sheet["skills"]["expert"]:
-                    skill_values = self.sheet["skills"]["expert"][skill_to_roll]
-                else:
-                    # Para características como INT, DEX, etc.
-                    if skill_to_roll in self.sheet["characteristics"]:
-                        char_value = self.sheet["characteristics"][skill_to_roll]["full"]
-                        skill_values = {"full": char_value, "half": char_value // 2}
-                    else:
-                        print(f"Perícia '{skill_to_roll}' não encontrada. Usando valores padrão.")
-                        skill_values = {"full": 30, "half": 15}
-
-                target_value = skill_values["full"]
-                half_value = skill_values["half"]
-
-                # Verifica se há modificadores ativos para esta perícia
-                has_penalty = any(
-                    mod.get("skill") == skill_to_roll and mod.get("type") == "penalty_dice"
-                    for mod in self.sheet["status"]["modifiers"] if isinstance(mod, dict)
-                )
-
-                has_bonus = any(
-                    mod.get("skill") == skill_to_roll and mod.get("type") == "bonus_dice"
-                    for mod in self.sheet["status"]["modifiers"] if isinstance(mod, dict)
-                )
-
-                # Realiza o teste do agente
-                agent_level, agent_roll = make_check(target_value, half_value, bonus_dice=has_bonus, penalty_dice=has_penalty)
-                print(f"Agente Rolled {skill_to_roll}: {agent_roll} vs {target_value} -> Level {agent_level}")
-
-                # Realiza o teste do oponente
-                opponent_level, opponent_roll = make_check(opponent_skill["full"], opponent_skill["half"])
-                print(f"Oponente Rolled: {opponent_roll} vs {opponent_skill['full']} -> Level {opponent_level}")
-
-                # Determina o resultado do confronto
-                if agent_level > opponent_level:
-                    result_key = "win"
-                elif agent_level < opponent_level:
-                    result_key = "lose"
-                else:
-                    result_key = "draw"
+                # Usar o método robusto da classe Character para teste oposto
+                try:
+                    roll_result = self.character.opposed_roll(
+                        skill_to_roll, 
+                        "common",  # Tentar common primeiro
+                        opponent_skill["full"],
+                        opponent_skill["half"]
+                    )
+                except KeyError:
+                    # Se não estiver em common, tentar combat
+                    try:
+                        roll_result = self.character.opposed_roll(
+                            skill_to_roll, 
+                            "combat",
+                            opponent_skill["full"],
+                            opponent_skill["half"]
+                        )
+                    except KeyError:
+                        # Se não estiver em combat, tentar expert
+                        try:
+                            roll_result = self.character.opposed_roll(
+                                skill_to_roll, 
+                                "expert",
+                                opponent_skill["full"],
+                                opponent_skill["half"]
+                            )
+                        except KeyError:
+                            print(f"ERRO: Perícia '{skill_to_roll}' não encontrada para teste oposto.")
+                            return "Ação de segurança executada devido a perícia inexistente em teste oposto."
+                
+                # Extrair informações do resultado
+                result_key = roll_result["outcome"]  # "win", "lose", "draw"
+                agent_level = roll_result["my_result"]["level"]
+                agent_roll = roll_result["my_result"]["roll"]
+                opponent_level = roll_result["opponent_level"]
+                opponent_roll = roll_result["opponent_roll"]
+                
+                print(f"Agente Rolled {skill_to_roll}: {agent_roll} -> Level {agent_level}")
+                print(f"Oponente Rolled: {opponent_roll} -> Level {opponent_level}")
+                print(f"Resultado: {result_key}")
                 
                 if result_key in results:
                     result = results[result_key]
@@ -790,46 +766,10 @@ class Agent:
         # Futuramente, poderia usar um LLM para extrair contexto do page_text
         pass
 
-    def apply_penalty(self, effect):
-        """Aplica uma penalidade a uma perícia."""
-        skill = effect["skill"] # e.g., "Fighting"
-        duration = effect["duration"] # e.g., 1 number of rolls    
-        self.sheet["status"]["modifiers"].append((skill, "penalty_dice", duration))
-        print(f"Applied penalty to {skill} for {duration}.")
-
-    def heal_status(self, effect):
-        """Cura um status ou dano."""
-        status_to_heal = effect["amount"]
-        self.sheet["status"]["damage_taken"] = max(0, self.sheet["status"]["damage_taken"] - status_to_heal)
-        damage_level_map = self.sheet["status"]["damage_levels"]
-        current_level = damage_level_map[self.sheet["status"]["damage_taken"]]
-        print(f"Healed damage: {status_to_heal}. Total damage: {self.sheet['status']['damage_taken']}. Status: {current_level}")
-
-    def take_damage(self, effect):
-        """Aplica dano ao personagem e atualiza o status."""
-        amount = effect.get("amount", 0)
-        self.sheet["status"]["damage_taken"] += amount
-        
-        # Atualiza o nível de dano atual
-        damage_level_map = self.sheet["status"]["damage_levels"]
-        current_level_index = self.sheet["status"]["damage_taken"]
-
-        if current_level_index >= len(damage_level_map):
-            current_level = "Impaired"
-            self.current_page = 999 # End game
-        else:
-            current_level = damage_level_map[current_level_index]
-
-        print(f"Took {amount} damage. Total damage: {self.sheet['status']['damage_taken']}. Status: {current_level}")
-        #se o level for Impaired, o jogo termina
-        if current_level == "Impaired":
-            print("Character is Impaired. Game Over.")
-            self.current_page = 999
-
 
 class GameInstructions:
     def get_backstory(self):
-        return "Um oficial recém-formado na divisão de crimes especiais, conhecido por sua abordagem metódica."
+        return "Você é um agente OODA baseado em IA navegando por um livro-jogo de investigação policial. Seu objetivo é resolver o mistério, tomar decisões estratégicas e manter seu personagem vivo. Use suas habilidades de raciocínio, análise e tomada de decisão para progredir na história."
 
 class GameData:
     def __init__(self):
