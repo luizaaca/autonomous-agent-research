@@ -48,7 +48,8 @@ PAGES = {
     },
     10: {
         "text": "Mrs Fellaman heads for the kitchen. You take a moment to survey the flat. Ignoring a chair with its legs broken and the fragments of crockery strewn across the floor, you can see the Victorian origins of the building this flat was previously the servants' quarters, as well as the kitchen and coal bunker. Everything is crammed into a tight space with a low ceiling. The fireplace is bricked up. You have a moment to consider how to handle the ghost in this place. A magical intervention will be required. Spells in ROL:RPG are cast by forming shapes in the mind (forma). First order spells use only a single forma. DCI Nightingale, the Folly's resident master of magic, has taught you lux, which you used to master the spell Werelight. You have not yet practised enough to learn a second order spell combining two forma. But you have learned a second forma and can use it for another first order spell.",
-        "choices": [{"text": "Se decidiu aprender Impello", "goto": 21}, {"text": "Se decidiu aprender Scindere", "goto": 30}]
+        "choices": [{"text": "Se decidiu aprender Impello", "effects": [{"action": "gain_skill", "skill": "Impello"}], "goto": 21}, 
+                    {"text": "Se decidiu aprender Scindere", "effects": [{"action": "gain_skill", "skill": "Scindere"}], "goto": 30}]
     },
     11: {
         "text": "From the corner of the yard, behind the bins, comes the sound of bestial rage and mortal combat. Something in the shadows tears through plastic and cardboard, snarling through its teeth. It does not sound much like Toby the Ghost-Hunting Dog, who has a generally amiable personality, with a distinct affinity for anybody providing food.",
@@ -544,7 +545,7 @@ PAGES = {
         "choices": [
                       {
                 "text": "Try Your Luck by making a Hard roll against INT.",
-                "effects": [{"action": "spend_luck", "amount": 1}],
+                "effects": [{"action": "spend_luck", "amount": 10}],
                 "roll": "INT",
                 "difficulty": "hard",
                 "results": {
@@ -557,7 +558,7 @@ PAGES = {
             },
             {
                 "text": "Try Your Luck by making a Hard roll against POW.",
-                "effects": [{"action": "spend_luck", "amount": 1}],
+                "effects": [{"action": "spend_luck", "amount": 10}],
                 "roll": "POW",
                 "difficulty": "hard",
                 "results": {
