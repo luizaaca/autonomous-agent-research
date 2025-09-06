@@ -1,6 +1,6 @@
 # Prototyping an Autonomous Agent: From Concept to Python Implementation
 
-This notebook documents the architecture of an autonomous agent. The objective is to establish a conceptual system capable of operating continuously, making decisions, and executing actions in a perpetual cycle. The architecture outlined here serves as the foundation for an autonomous operating system, programmed by states and capable of performing system functions without interruption, such as self-evaluation and self-improvement.
+This repository documents the architecture of an autonomous agent. The objective is to establish a conceptual system capable of operating continuously, making decisions, and executing actions in a perpetual cycle. The architecture outlined here serves as the foundation for an autonomous operating system, programmed by states and capable of performing system functions without interruption, such as self-evaluation and self-improvement.
 
 ## 1. The Theoretical Foundation: LLMs and Agent Autonomy
 
