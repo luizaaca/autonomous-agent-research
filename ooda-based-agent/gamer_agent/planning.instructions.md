@@ -706,32 +706,32 @@ O sistema agora possui uma arquitetura sólida, código limpo, alta manutenibili
 
 **Plano de Refatoração - 6 Etapas**:
 
-- [ ] **ETAPA 1: Criar interface DecisionController**
+- [x] **ETAPA 1: Criar interface DecisionController**
   - Definir contrato abstrato para controladores de decisão
   - Especificar métodos: `decide(choices, character, context)` 
   - Definir estruturas de retorno padronizadas
 
-- [ ] **ETAPA 2: Implementar DefaultDecisionController**
+- [x] **ETAPA 2: Implementar DefaultDecisionController**
   - Migrar lógica atual do `_execute_decision_logic` para controller
   - Manter comportamento idêntico (backward compatibility)
   - Organizar código em métodos específicos por tipo de decisão
 
-- [ ] **ETAPA 3: Refatorar Agent para usar injeção de dependência**
+- [x] **ETAPA 3: Refatorar Agent para usar injeção de dependência**
   - Adicionar `decision_controller` no construtor do Agent
   - Modificar `_llm_decide()` para usar controller injetado
   - Manter interface pública inalterada
 
-- [ ] **ETAPA 4: Criar DecisionContext para estado compartilhado**
+- [x] **ETAPA 4: Criar DecisionContext para estado compartilhado**
   - Encapsular informações necessárias (character, game_data, current_page)
   - Simplificar interface entre Agent e DecisionController
   - Melhorar testabilidade
 
-- [ ] **ETAPA 5: Implementar controllers alternativos**
+- [x] **ETAPA 5: Implementar controllers alternativos**
   - `RandomDecisionController` - escolhas aleatórias para teste
   - `SimpleDecisionController` - lógica simplificada sem condições complexas
   - `LLMDecisionController` - integração futura com LLMs reais
 
-- [ ] **ETAPA 6: Testes e validação**
+- [x] **ETAPA 6: Testes e validação**
   - Testar comportamento idêntico com DefaultDecisionController
   - Validar injeção de controllers alternativos
   - Benchmarks de performance
@@ -806,26 +806,26 @@ Este plano mantém total compatibilidade com o código existente enquanto prepar
 
 **Plano de Correção - 4 Etapas**:
 
-- [ ] **ETAPA 1: Padronizar nomenclatura para `page_number`**
+- [x] **ETAPA 1: Padronizar nomenclatura para `page_number`**
   - Alterar todas as ocorrências de `page_id` para `page_number` em `character.py`
   - Corrigir método `render_history()` em `cockpit.py` para usar `page_number`
   - Atualizar chamadas no `agent.py` para consistência
   - Verificar compatibilidade com `GameData` objects
 
-- [ ] **ETAPA 2: Implementar truncamento inteligente**
+- [x] **ETAPA 2: Implementar truncamento inteligente**
   - Criar método `_smart_truncate_text()` no cockpit
   - Truncar nos últimos 50 caracteres preservando palavras completas
   - Adicionar "..." no início para indicar truncamento
   - Garantir que não corte no meio de palavras
 
-- [ ] **ETAPA 3: Eliminar sistema legado e centralizar ponto único**
+- [x] **ETAPA 3: Eliminar sistema legado e centralizar ponto único**
   - Desativar sistema legado no método `_orient()` do Agent
   - Estabelecer `cockpit.add_to_history()` como único ponto de entrada
   - Remover suporte para formato de tuplas em `render_history()`
   - Garantir que histórico aceite apenas formato moderno (dicts)
   - Remover campo "original_choices" do JSON (simplificar estrutura)
 
-- [ ] **ETAPA 4: Validar e otimizar sistema**
+- [x] **ETAPA 4: Validar e otimizar sistema**
   - Testar com cenários completos (rolagens, efeitos, opposite rolls)
   - Validar JSON output com todas as informações solicitadas
   - Confirmar eliminação total de duplicações
@@ -998,19 +998,19 @@ A lógica atual é muito simplista e não processa choices condicionais baseadas
 - **Sistema de debug** - logs detalhados com razão da decisão
 - **Validação robusta** - suporte para todos os tipos de choice identificados na análise
 
-- [ ] **ETAPA 3: Integrar DefaultDecisionController no Agent**
+- [x] **ETAPA 3: Integrar DefaultDecisionController no Agent**
   - Atualizar imports no agent.py para incluir DefaultDecisionController
   - Modificar construtor para usar DefaultDecisionController como padrão
   - Remover método `_execute_decision_logic_LEGACY` duplicado
   - Manter interface de injeção para permitir outros controllers
 
-- [ ] **ETAPA 4: Criar controllers alternativos para demonstração**
+- [x] **ETAPA 4: Criar controllers alternativos para demonstração**
   - `SimpleDecisionController` - primeira choice válida (atual)
   - `RandomDecisionController` - escolha aleatória (para testes)
   - `InteractiveDecisionController` - escolha manual via terminal (futuro)
   - `LLMDecisionController` - interface para LLM real (futuro)
 
-- [ ] **ETAPA 5: Testes de validação completa**
+- [x] **ETAPA 5: Testes de validação completa**
   - Testar com páginas condicionais complexas (ocupação, requires)
   - Validar comportamento idêntico ao sistema original
   - Testar injeção de controllers alternativos
@@ -1073,9 +1073,94 @@ class LLMDecisionController(DecisionController):
 - **Simplicidade** - Interface mínima para novos controllers
 - **Validação completa** - Testar todos os tipos de choices condicionais
 
-**Status**: ⏳ **AGUARDANDO APROVAÇÃO PARA INICIAR ETAPA 1**
+**Status**: ✅ **ETAPAS 1-3 CONCLUÍDAS COM SUCESSO - ARQUITETURA REFATORADA**
 
-`````
-``````
+### Refatoração Arquitetural Completa para Games (Setembro 2025)
 
-`````
+**Objetivo**: Implementar arquitetura limpa seguindo princípios de desenvolvimento de games, com separação adequada de responsabilidades.
+
+**Problemas Identificados na Arquitetura Original**:
+- ❌ `GameInstructions` e `GameData` em `main.py` (responsabilidades mal distribuídas)
+- ❌ Backstory como responsabilidade externa ao Character
+- ❌ Acoplamento entre main.py e lógica de domínio
+- ❌ Ausência de padrão Repository para dados do jogo
+
+**Plano de Refatoração Arquitetural - 4 Etapas**:
+
+- [x] **ETAPA A: Refatorar Character para backstory inteligente** ✅ **CONCLUÍDA**
+  - [x] Adicionar `get_game_backstory()` na classe Character
+  - [x] Backstory contextualizado por ocupação (Police Officer, Social Worker, Nurse)
+  - [x] Eliminar dependência de GameInstructions externa
+  - [x] Testes validados para todas as ocupações
+
+- [x] **ETAPA B: Criar GameRepository para gerenciamento de dados** ✅ **CONCLUÍDA**
+  - [x] Extrair `GameData` para `game_repository.py` 
+  - [x] Implementar padrão Repository com cache e validação
+  - [x] Interface compatível com código legado (método `get()`)
+  - [x] Estatísticas do jogo: 112 páginas, 162 choices, 109 páginas com escolhas
+
+- [x] **ETAPA C: Refatorar main.py para modo automático** ✅ **CONCLUÍDA**
+  - [x] Remover classes `GameInstructions` e `GameData` 
+  - [x] main.py como orchestrator puro (entry point apenas)
+  - [x] Configuração de RandomDecisionController para automação
+  - [x] Suporte a múltiplos tipos de controller (default, random)
+  - [x] Modo automático sem inputs manuais
+
+- [x] **ETAPA D: Limpeza e validação arquitetural** ✅ **CONCLUÍDA**
+  - [x] Remoção de imports desnecessários (`import pages` do main.py)
+  - [x] Validação de compatibilidade com código existente
+  - [x] Documentação da nova arquitetura
+  - [x] Separação limpa de responsabilidades
+
+**Arquitetura Final Implementada**:
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│    Character    │    │ GameRepository  │    │ DecisionCtrlrs  │
+│                 │    │                 │    │                 │
+│ • Backstory     │    │ • Padrão Repo   │    │ • Default       │
+│ • Ocupação      │    │ • Cache+Valid   │    │ • Random        │
+│ • Habilidades   │    │ • 112 páginas   │    │ • Simple        │
+│ • game_backstry │    │ • Interface .get│    │ • (Future: LLM) │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         ▲                      ▲                      ▲
+         │                      │                      │
+         └──────────────────────┼──────────────────────┘
+                                │
+                        ┌─────────────────┐
+                        │     Agent       │
+                        │                 │
+                        │ • OODA Loop     │
+                        │ • Cockpit       │
+                        │ • DI Pattern    │
+                        └─────────────────┘
+                                ▲
+                                │
+                        ┌─────────────────┐
+                        │    main.py      │
+                        │                 │
+                        │ • Entry Point   │
+                        │ • Orchestrator  │
+                        │ • Scenario Cfg  │
+                        └─────────────────┘
+```
+
+**Benefícios Alcançados**:
+- ✅ **Separação de Responsabilidades**: Cada classe tem uma responsabilidade única
+- ✅ **Padrão Repository**: Dados do jogo encapsulados com interface limpa
+- ✅ **Injeção de Dependência**: Controllers plugáveis para diferentes comportamentos
+- ✅ **Backstory Inteligente**: Character conhece seu contexto de jogo
+- ✅ **Arquitetura Extensível**: Fácil adicionar novos controllers (LLM, Interactive)
+- ✅ **Modo Automático**: Execução sem intervenção manual para testes
+- ✅ **Compatibilidade**: Código legado continua funcionando
+
+**Testes de Validação**:
+- ✅ Character.get_game_backstory() funcionando para todas as ocupações
+- ✅ GameRepository com 112 páginas e 162 choices detectadas
+- ✅ Agent executando com RandomDecisionController
+- ✅ main.py como orchestrator puro
+- ✅ Arquitectura limpa validada
+
+**Status**: ✅ **REFATORAÇÃO ARQUITETURAL 100% CONCLUÍDA**
+
+

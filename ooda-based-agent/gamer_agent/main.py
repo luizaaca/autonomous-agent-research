@@ -1,52 +1,60 @@
-import pages
 from agent import Agent
+from game_repository import GameRepository
+from default_decision_controller import DefaultDecisionController, RandomDecisionController
 
-class GameInstructions:
-    def get_backstory(self):
-        return "Você é um agente OODA baseado em IA navegando por um livro-jogo de investigação policial. Seu objetivo é resolver o mistério, tomar decisões estratégicas e manter seu personagem vivo. Use suas habilidades de raciocínio, análise e tomada de decisão para progredir na história."
 
-class GameData:
-    def __init__(self):
-        self.pages = pages.PAGES
+def run_scenario(name: str, occupation: str, controller_type: str = "random"):
+    """
+    Executa um cenário de teste com configurações específicas.
     
-    def get(self, page_id, default=None):
-        return self.pages.get(page_id, default)
+    Args:
+        name: Nome do personagem
+        occupation: Ocupação do personagem
+        controller_type: Tipo de controller ("default" ou "random")
+    """
+    print(f"--- Running Scenario: {name} ({occupation}) with {controller_type.title()}Controller ---")
+    
+    # Criar repositório de dados do jogo
+    game_repository = GameRepository()
+    
+    # Selecionar controller baseado no tipo
+    if controller_type == "random":
+        decision_controller = RandomDecisionController()
+    else:
+        decision_controller = DefaultDecisionController(debug=True)
+    
+    # Criar e executar agente
+    agent = Agent(
+        name=name,
+        occupation=occupation,
+        game_instructions=None,  # Não precisamos mais - Character tem get_game_backstory()
+        game_data=game_repository,
+        decision_controller=decision_controller
+    )
+    
+    try:
+        agent.run()
+        print(f"--- Scenario {name} Finished Successfully ---\n")
+    except Exception as e:
+        print(f"--- Scenario {name} Failed: {e} ---\n")
+
 
 if __name__ == "__main__":
-    game_instructions = GameInstructions()
-    game_data = GameData()
-
-    input("Pressione Enter para iniciar o próximo cenário de teste...\n")
-    # Scenario 1: Police Officer (default)
-    print("---" + " Running Scenario 1: Police Officer " + "---")
-    agent_police = Agent(
-        name="Alex", 
-        occupation="Police Officer", 
-        game_instructions=game_instructions, 
-        game_data=game_data
-    )
-    agent_police.run()
-    print("---" + " Scenario 1 Finished " + "---\n")
-    input("Pressione Enter para iniciar o próximo cenário de teste...\n")
-    # Scenario 2: Social Worker
-    print("---" + " Running Scenario 2: Social Worker " + "---")
-    agent_social = Agent(
-        name="Brenda", 
-        occupation="Social Worker", 
-        game_instructions=game_instructions, 
-        game_data=game_data
-    )
-    agent_social.run()
-    print("---" + " Scenario 2 Finished " + "---\n")
-
-    input("Pressione Enter para iniciar o próximo cenário de teste...\n")
-    # Scenario 3: Nurse
-    print("---" + " Running Scenario 3: Nurse " + "---")
-    agent_nurse = Agent(
-        name="Charles", 
-        occupation="Nurse", 
-        game_instructions=game_instructions, 
-        game_data=game_data
-    )
-    agent_nurse.run()
-    print("---" + " Scenario 3 Finished " + "---\n")
+    print("=== TESTE AUTOMÁTICO COM ARQUITETURA REFATORADA ===\n")
+    print("Usando Character.get_game_backstory() + GameRepository + RandomDecisionController\n")
+    
+    # Cenários de teste com RandomDecisionController
+    scenarios = [
+        ("Alex", "Police Officer"),
+        ("Brenda", "Social Worker"), 
+        ("Charles", "Nurse")
+    ]
+    
+    for name, occupation in scenarios:
+        run_scenario(name, occupation, "random")
+    
+    print("=== TESTE AUTOMÁTICO CONCLUÍDO ===")
+    
+    # Opcional: rodar um cenário com DefaultController para comparação
+    print("\n=== COMPARAÇÃO COM DEFAULT CONTROLLER ===")
+    run_scenario("Detective", "Police Officer", "default")

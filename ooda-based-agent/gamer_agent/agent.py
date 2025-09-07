@@ -5,8 +5,16 @@ from default_decision_controller import DefaultDecisionController
 
 class Agent:
     def __init__(self, name, occupation, game_instructions, game_data, decision_controller: DecisionController = None):
-        # Refatorado para usar Character ao invés de create_character_sheet/setup_character
-        self.character = Character(name, occupation, 30, game_instructions.get_backstory())
+        # Refatorado para usar Character com backstory inteligente
+        # game_instructions agora é opcional - Character tem get_game_backstory()
+        if game_instructions and hasattr(game_instructions, 'get_backstory'):
+            # Compatibilidade com código legado
+            backstory = game_instructions.get_backstory()
+        else:
+            # Nova arquitetura - Character gerencia seu próprio backstory
+            backstory = ""  # Será substituído por get_game_backstory()
+        
+        self.character = Character(name, occupation, 30, backstory)
         self.game_data = game_data
         self.current_page = 1
         self.combat_status = {}

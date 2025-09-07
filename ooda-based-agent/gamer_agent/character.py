@@ -234,6 +234,31 @@ class Character:
         """
         return self._sheet
     
+    def get_game_backstory(self) -> str:
+        """
+        Gera backstory contextualizado para o jogo baseado na ocupação.
+        
+        Substitui a lógica de GameInstructions.get_backstory() centralizando
+        a responsabilidade de backstory na classe Character, que é quem
+        deve conhecer seu contexto de jogo.
+        
+        Returns:
+            String com backstory completo incluindo contexto do jogo e ocupação
+        """
+        base_context = "Você é um agente OODA baseado em IA navegando por um livro-jogo de investigação policial."
+        
+        occupation_context = {
+            "Police Officer": "Como policial experiente, você tem autoridade e conhecimento sobre procedimentos legais.",
+            "Social Worker": "Como assistente social, você entende comportamento humano e tem habilidades de comunicação.",
+            "Nurse": "Como enfermeiro, você tem conhecimento médico e experiência em situações de crise."
+        }
+        
+        occupation_specific = occupation_context.get(self.occupation, "Você deve usar suas habilidades únicas")
+        
+        game_objective = "Seu objetivo é resolver o mistério, tomar decisões estratégicas e manter seu personagem vivo. Use suas habilidades de raciocínio, análise e tomada de decisão para progredir na história."
+        
+        return f"{base_context} {occupation_specific} {game_objective}"
+    
     def get_characteristic(self, char_name: str) -> Dict[str, int]:
         """
         Obtém os valores de uma característica específica.
