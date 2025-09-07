@@ -52,15 +52,24 @@ A implementação atual utiliza o padrão `DecisionController` com injeção de 
                         └─────────────────┘
 ```
 
-### 2.2. Arquitetura Alvo com Player Adapters
+### 2.2. Arquitetura Alvo com Player Adapters (v1.2 - Implementação Confirmada)
 
-Para suportar diferentes interfaces de jogador (automática, humana, IA), a arquitetura evoluiu para usar o padrão **Adapter**. Isso desacopla a **lógica de decisão** da **captura de entrada**, resultando em um design mais limpo e extensível.
+**DECISÕES ARQUITETURAIS CONFIRMADAS:**
+- **Evolução do DecisionController → PlayerInputAdapter** (Opção C)
+- **Retorno: choice_index (int)** em vez de choice dict
+- **Construtor Agent: `Agent(character, game_repository, player_input_adapter)`**
+- **Ocupação definida dinamicamente** via `"set-occupation"` effect
 
-O diagrama abaixo ilustra esta arquitetura alvo:
+Para suportar diferentes interfaces de jogador (automática, humana, IA), a arquitetura evolui usando o padrão **Adapter**. Isso desacopla a **lógica de decisão** da **captura de entrada**, substituindo o `DecisionController` por `PlayerInputAdapter`.
+
+O diagrama abaixo ilustra esta arquitetura alvo confirmada:
 
 ```
         ┌─────────────┐
         │   main.py   │
+        │ • argparse  │
+        │ • player    │
+        │   selection │
         └─────────────┘
                │
         (Cria e Injeta)
@@ -68,6 +77,10 @@ O diagrama abaixo ilustra esta arquitetura alvo:
                ▼
         ┌─────────────┐
         │    Agent    │
+        │ • character │
+        │ • game_repo │
+        │ • player_   │
+        │   adapter   │
         └─────────────┘
       ┌─────────┼───────────┬────────────────┐
     (Usa)     (Usa)       (Usa)            (Usa)
@@ -75,8 +88,10 @@ O diagrama abaixo ilustra esta arquitetura alvo:
       ▼         ▼           ▼                ▼
 ┌─────────┐ ┌─────────┐ ┌───────┐ ┌────────────────────┐
 │Character│ │GameRepo │ │Cockpit│ │ PlayerInputAdapter │
-└─────────┘ └─────────┘ └───────┘ │    (Interface)     │
-                                  └────────────────────┘
+│• No occ │ │• 112 pgs│ │• Rich │ │    (Interface)     │
+│  initial│ │• Cache  │ │ render│ │ • get_decision()   │
+│• Dynamic│ │         │ │       │ │ • returns int      │
+└─────────┘ └─────────┘ └───────┘ └────────────────────┘
                                              ▲
                                              │
                                        (Implementa)
@@ -85,13 +100,22 @@ O diagrama abaixo ilustra esta arquitetura alvo:
                         ▼                    ▼                    ▼
                ┌────────────────┐   ┌────────────────┐   ┌────────────────┐
                │  DemoAdapter   │   │ HumanAdapter   │   │   LLMAdapter   │
+               │• Uses Default  │   │• Console I/O   │   │• API Call      │
+               │  Controller    │   │• Input Loop    │   │• Response Parse│
+               │• Returns Index │   │• Validation    │   │• Error Handle  │
                └────────────────┘   └────────────────┘   └────────────────┘
 ```
 
 
-### 2.3. Fluxo do Jogo (Ciclo OODA)
+### 2.3. Fluxo do Jogo (Ciclo OODA) - v1.2 Confirmado
 
-O fluxo de decisão principal segue o ciclo OODA, com a interação do `PlayerInputAdapter` e a validação da escolha.
+O fluxo de decisão principal segue o ciclo OODA, com a interação do `PlayerInputAdapter` retornando **choice_index (int)**.
+
+**FLUXO CONFIRMADO:**
+1. PlayerInputAdapter retorna `choice_index` (int, base 1)
+2. Agent converte para base 0: `chosen_choice = choices[choice_index - 1]`
+3. Agent processa efeitos (incluindo `"set-occupation"`)
+4. Validação de regras permanece no Agent
 
 ```
 [main.py]          [Agent]               [Character]     [PlayerInputAdapter]
@@ -110,17 +134,20 @@ O fluxo de decisão principal segue o ciclo OODA, com a interação do `PlayerIn
     │                  │─────────────────────▶│                    │
     │                  │◀─────────────────────│                    │
     │                  │                      │                    │
-    │                  │ 3. Decide (get_decision)                  │
+    │                  │ 3. Decide (get_decision) → returns int    │
     │                  │──────────────────────────────────────────▶│
     │                  │                      │ Renderiza cockpit  │
     │                  │                      │ e obtém input      │
     │                  │                      │◀───────────────────│        
     │                  │                      │───────────────────▶│        
     │                  │                      │                    │
-    │                  │ Retorna choice_index │                    │
+    │                  │ Retorna choice_index (int)                │
     │                  │◀------------------------------------------│
     │                  │                      │                    │
-    │                  │ 4. Valida Escolha                         │
+    │                  │ 4. Get choice dict: choices[index-1]      │
+    │                  │─────────────────────▶│                    │
+    │                  │                      │                    │
+    │                  │ 5. Valida Escolha + Processa Efeitos     │
     │                  │◀─────────────────────┐                    │
     │                  │─────────────────────▶│                    │
     │                  │                      │                    │
@@ -135,7 +162,7 @@ O fluxo de decisão principal segue o ciclo OODA, com a interação do `PlayerIn
     │                  │┌─────────────────────────────────────────┐│
     │                  ││ else: Escolha Válida                    ││
     │                  ││                                         ││
-    │                  ││ 5. Act (Aplica efeitos)                 ││
+    │                  ││ 6. Act (Aplica efeitos + set-occupation)││
     │                  ││─────┐                                   ││
     │                  ││ ◀───┘                                   ││
     │                  ││                                         ││
@@ -203,10 +230,11 @@ A ficha do personagem é a estrutura de dados central que representa o estado do
 ### 3.2. Valores Possíveis por Campo
 
 #### `info.occupation`
-As ocupações definem os atributos e habilidades iniciais do personagem.
+As ocupações definem os atributos e habilidades iniciais do personagem. **IMPORTANTE: A ocupação é definida dinamicamente durante o jogo via efeito `"set-occupation"`.**
 - `Police Officer`
 - `Social Worker`
 - `Nurse`
+- `null` (Estado inicial - sem ocupação definida)
 
 #### `characteristics`
 Atributos principais do personagem. Os valores são definidos pela ocupação.
@@ -348,8 +376,9 @@ class PlayerInputAdapter(ABC):
 
 #### a) `DemoPlayerAdapter`
 - **Propósito**: Executar o jogo de forma não interativa para demonstrações ou testes.
-- **Lógica**: Utilizará o `DefaultDecisionController` já implementado para tomar decisões com base na lógica de jogo pré-definida (primeira escolha válida, respeito às condicionais de ocupação, etc.).
-- **Fluxo**: `Agent` chama `get_decision` -> `DemoPlayerAdapter` chama `DefaultDecisionController.decide()` -> Retorna o índice da escolha resultante.
+- **Lógica**: Utilizará a lógica do `DefaultDecisionController` atual para tomar decisões (primeira escolha válida, respeito às condicionais de ocupação, etc.).
+- **Fluxo**: `Agent` chama `get_decision` → `DemoPlayerAdapter` aplica lógica de decisão → Encontra choice no array → Retorna o índice da escolha (int).
+- **Implementação**: Interno ao adapter, sem exposição do DecisionController.
 
 #### b) `HumanPlayerAdapter`
 - **Propósito**: Permitir que um jogador humano jogue através do terminal.
@@ -373,18 +402,19 @@ class PlayerInputAdapter(ABC):
 
 ### 5.4. Tratamento de Escolhas Inválidas
 
-A responsabilidade de **obter** a escolha é do `PlayerInputAdapter`, mas a de **validar** a escolha contra as regras do jogo (e.g., pré-requisitos de ocupação) permanece com o `Agent` e seu `DecisionController`.
+A responsabilidade de **obter** a escolha é do `PlayerInputAdapter` (retorna choice_index), mas a de **validar** a escolha contra as regras do jogo (e.g., pré-requisitos de ocupação) permanece com o `Agent`.
 
-O fluxo de jogo será o seguinte:
+**FLUXO CONFIRMADO (v1.2):**
 1.  O `Agent` determina as escolhas válidas para a página atual.
-2.  O `Agent` chama `player_input_adapter.get_decision()` para obter a intenção do jogador (o índice da escolha).
-3.  O `Agent` verifica se a escolha selecionada é genuinamente válida de acordo com o estado atual do personagem (e.g., `character.occupation`).
-4.  **Se a escolha for inválida**:
+2.  O `Agent` chama `choice_index = player_input_adapter.get_decision(available_choices, cockpit_state)` (retorna int).
+3.  O `Agent` obtém a escolha: `chosen_choice = available_choices[choice_index - 1]` (converte para base 0).
+4.  O `Agent` verifica se a escolha selecionada é genuinamente válida de acordo com o estado atual do personagem.
+5.  **Se a escolha for inválida**:
     - O `Agent` **não** avança para a próxima página.
     - Uma mensagem de erro é adicionada ao histórico do `cockpit`. Ex: `"Tentativa de usar autoridade policial falhou. Ocupação atual: Enfermeiro. Por favor, escolha novamente."`
     - O `Agent` repete o passo 2, apresentando novamente as mesmas opções ao jogador no mesmo turno.
-5.  **Se a escolha for válida**:
-    - O `Agent` processa os efeitos da escolha e avança para a próxima página.
+6.  **Se a escolha for válida**:
+    - O `Agent` processa os efeitos da escolha (incluindo `"set-occupation"`) e avança para a próxima página.
 
 Esta abordagem garante que a interface do jogador (humano ou IA) possa tentar qualquer ação, mas o motor do jogo (`Agent`) tem a autoridade final para garantir que as regras sejam cumpridas, fornecendo feedback claro em caso de falha.
 
@@ -407,37 +437,43 @@ Serão criados os seguintes arquivos no diretório `gamer_agent/`:
   - Criar a classe `PlayerInputAdapter(ABC)` exatamente como especificado na seção 5.2.
 
 - **`player_adapters.py`**:
-  - Importar `PlayerInputAdapter`, `DefaultDecisionController`, e outras dependências necessárias.
+  - Importar `PlayerInputAdapter` e outras dependências necessárias.
   - Implementar `DemoPlayerAdapter(PlayerInputAdapter)`:
-    - No construtor, receberá uma instância de `DefaultDecisionController`.
-    - O método `get_decision` chamará `self.decision_controller.decide()` e retornará o índice da escolha.
+    - Internalizar a lógica de decisão do `DefaultDecisionController` atual.
+    - O método `get_decision` aplicará a lógica e retornará o índice da escolha (int).
+    - **Não** expor `DefaultDecisionController` externamente.
   - Implementar `HumanPlayerAdapter(PlayerInputAdapter)`:
     - O método `get_decision` implementará o loop de input no console, tratando entradas inválidas (não numéricas, fora do range) até que uma escolha válida seja inserida.
+    - Retorna o índice da escolha válida (int).
   - Implementar `LLMPlayerAdapter(PlayerInputAdapter)`:
-    - O método `get_decision` conterá a lógica para chamar a API do LLM. Inicialmente, usar `DemoPlayerAdapter` internamente.
+    - O método `get_decision` conterá a lógica para chamar a API do LLM.
+    - Processar resposta da API para extrair o índice da escolha.
     - Incluir tratamento de erro para respostas mal formatadas da API.
+    - Retorna o índice da escolha (int).
 
 ### 6.3. Passo 2: Refatorar a Classe `Agent`
 
-A classe `Agent` em `agent.py` será modificada para usar o sistema de injeção de dependência.
+A classe `Agent` em `agent.py` será modificada para usar o sistema de injeção de dependência com `PlayerInputAdapter`.
 
 - **Construtor (`__init__`)**:
-  - Modificar a assinatura para `__init__(self, character: Character, game_repository: GameRepository, player_input_adapter: PlayerInputAdapter)`.
+  - **MUDANÇA CONFIRMADA**: Modificar a assinatura para `__init__(self, character: Character, game_repository: GameRepository, player_input_adapter: PlayerInputAdapter)`.
   - Armazenar `self.player_input_adapter = player_input_adapter`.
   - Remover a instanciação direta do `DefaultDecisionController`.
+  - **Character sem ocupação inicial**: Ocupação será definida via `"set-occupation"` effect.
 
-- **Método `run_ooda_loop` (ou similar)**:
+- **Método `run` (OODA Loop)**:
   - **Observe**: O agente já observa o estado.
   - **Orient**: O agente determina as escolhas disponíveis.
   - **Decide**:
     - Chamar `choice_index = self.player_input_adapter.get_decision(available_choices, cockpit_state)`.
-    - **Validação**: Após receber o `choice_index`, o `Agent` (ou um `DecisionController` interno) deve validar se a escolha é permitida pelas regras do jogo (ex: ocupação).
+    - **Conversão**: `chosen_choice = available_choices[choice_index - 1]` (converter para base 0).
+  - **Validação**: Após obter `chosen_choice`, o `Agent` valida se a escolha é permitida pelas regras do jogo.
     - **Se inválida**:
-      - Adicionar uma mensagem ao histórico do `character_sheet`. Ex: `self.character.add_history_log("Invalid choice: 'Use police authority' requires 'Police Officer' occupation. Please try again.")`.
+      - Adicionar uma mensagem ao histórico do `character`. Ex: `self.character.add_history_log("Invalid choice: 'Use police authority' requires 'Police Officer' occupation. Please try again.")`.
       - Chamar `continue` no loop para recomeçar o ciclo OODA na mesma página, sem alterar o estado do jogo.
     - **Se válida**:
       - Continuar com a execução da escolha.
-  - **Act**: Aplicar os efeitos da escolha e atualizar a página atual.
+  - **Act**: Aplicar os efeitos da escolha (incluindo `"set-occupation"` se não houver ocupação previa, deve validar e retornar opção inválida) e atualizar a página atual.
 
 ### 6.4. Passo 3: Refatorar a Classe `Cockpit`
 
@@ -454,6 +490,7 @@ O arquivo `main.py` será o responsável por configurar e injetar o adaptador de
 
 - **Lógica de Inicialização**:
   - Usar `argparse` para ler um argumento de linha de comando, e.g., `--player {demo,human,llm}`.
+  - **Character sem ocupação inicial**: `character = Character(name="Agent", occupation=None)`.
   - Com base no argumento, instanciar o adaptador correspondente:
     ```python
     if args.player == 'human':
@@ -461,8 +498,7 @@ O arquivo `main.py` será o responsável por configurar e injetar o adaptador de
     elif args.player == 'llm':
         player_adapter = LLMPlayerAdapter(api_key=os.getenv("GEMINI_API_KEY"))
     else: # default to demo
-        decision_controller = DefaultDecisionController(character)
-        player_adapter = DemoPlayerAdapter(decision_controller)
+        player_adapter = DemoPlayerAdapter()  # Sem DecisionController externo
     ```
   - Instanciar o `Agent` com o adaptador escolhido:
     ```python
