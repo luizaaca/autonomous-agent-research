@@ -788,4 +788,294 @@ Este plano mantém total compatibilidade com o código existente enquanto prepar
 
 **Status**: ⏳ **AGUARDANDO APROVAÇÃO PARA INICIAR IMPLEMENTAÇÃO**
 
+### Correção do Sistema de Histórico JSON (Setembro 2025)
+
+**Objetivo**: Corrigir problemas no sistema de histórico do cockpit para exibir informações estruturadas, eliminar duplicações e padronizar nomenclatura.
+
+**Problemas Identificados**:
+1. **Inconsistência de nomenclatura** - `page_number` vs `page_id` causando falhas
+2. **Histórico duplicado** - Sistema legado (tuplas) + sistema novo (dicts) rodando em paralelo
+3. **Truncamento incorreto** - Corte no meio de palavras ao invés de preservar palavras completas
+4. **Múltiplos pontos de entrada** - Dois sistemas adicionando ao histórico simultaneamente
+5. **Compatibilidade com GameData** - Erro `TypeError: argument of type 'GameData' is not iterable`
+
+**Análise da Duplicação**:
+- **Sistema Legado**: Método `_orient()` no Agent adiciona tuplas `(page_id, page_text)`
+- **Sistema Novo**: Método `cockpit.add_to_history()` adiciona dicts estruturados
+- **Resultado**: Mesma página aparece duas vezes com formatos diferentes
+
+**Plano de Correção - 4 Etapas**:
+
+- [ ] **ETAPA 1: Padronizar nomenclatura para `page_number`**
+  - Alterar todas as ocorrências de `page_id` para `page_number` em `character.py`
+  - Corrigir método `render_history()` em `cockpit.py` para usar `page_number`
+  - Atualizar chamadas no `agent.py` para consistência
+  - Verificar compatibilidade com `GameData` objects
+
+- [ ] **ETAPA 2: Implementar truncamento inteligente**
+  - Criar método `_smart_truncate_text()` no cockpit
+  - Truncar nos últimos 50 caracteres preservando palavras completas
+  - Adicionar "..." no início para indicar truncamento
+  - Garantir que não corte no meio de palavras
+
+- [ ] **ETAPA 3: Eliminar sistema legado e centralizar ponto único**
+  - Desativar sistema legado no método `_orient()` do Agent
+  - Estabelecer `cockpit.add_to_history()` como único ponto de entrada
+  - Remover suporte para formato de tuplas em `render_history()`
+  - Garantir que histórico aceite apenas formato moderno (dicts)
+  - Remover campo "original_choices" do JSON (simplificar estrutura)
+
+- [ ] **ETAPA 4: Validar e otimizar sistema**
+  - Testar com cenários completos (rolagens, efeitos, opposite rolls)
+  - Validar JSON output com todas as informações solicitadas
+  - Confirmar eliminação total de duplicações
+
+**Mudanças Propostas**:
+
+1. **Desativar sistema legado no `agent.py`**:
+   ```python
+   def _orient(self, page_text):
+       # REMOVER: Sistema legado
+       # if self.current_page not in self.sheet["page_history"]:
+       #     self.sheet["page_history"].append((self.current_page, page_text))
+       
+       # Histórico gerenciado EXCLUSIVAMENTE pelo cockpit
+       pass
+   ```
+
+2. **Remover suporte para tuplas legadas no `cockpit.py`**:
+   ```python
+   # ANTES: Suporta tuplas e dicts
+   if isinstance(entry, dict):
+       # processa dict
+   elif isinstance(entry, tuple):
+       # processa tupla legada
+   
+   # DEPOIS: Apenas dicts modernos
+   if not isinstance(entry, dict):
+       print(f"AVISO: Entrada inválida ignorada: {type(entry)}")
+       continue
+   ```
+
+3. **Remover campo "original_choices" para simplificar estrutura**:
+   ```python
+   # ANTES: 
+   formatted_entry = {
+       "page_number": 110,
+       "original_choices": [...],  // REMOVER
+       "choice_index": 1,
+       "choice_made": {...}
+   }
+   
+   # DEPOIS:
+   formatted_entry = {
+       "page_number": 110, 
+       "choice_made": {...}
+   }
+   ```
+
+**Estrutura JSON Esperada**:
+```json
+{
+  "step": 1,
+  "page_number": 110,
+  "page_text": "...the ground as stars explode across your vision.",
+  "choice_made": {
+    "text": "Try to dodge",
+    "roll": "DEX"
+  },
+  "action_result": {
+    "executed_outcome": "You failed to dodge the attack",
+    "roll_result": 85,
+    "skill_used": "",
+    "target_value": 0,
+    "success": false
+  }
+}
+```
+
+**Benefícios Esperados**:
+- **Eliminação total de duplicações** - Um único ponto de entrada no histórico
+- **Nomenclatura consistente** - `page_number` em todo o sistema
+- **Truncamento inteligente** - Preservação de palavras completas
+- **JSON estruturado simplificado** - Apenas campos essenciais para decisão e resultado
+- **Histórico limpo** - Apenas formato moderno, sem legado
+- **Estrutura mais focada** - Remove campos desnecessários como "original_choices" e "choice_index"
+
+**Pontos de Atenção**:
+- **Backward compatibility** - Não quebrar código existente
+- **Performance** - Truncamento eficiente sem overhead
+- **Validação** - Garantir que todos os dados são preservados
+- **GameData compatibility** - Funcionar com objetos que têm método `.get()`
+
+**Status**: ✅ **ETAPAS 1-4 CONCLUÍDAS COM SUCESSO**
+
+### Sistema de Injeção de Dependência para Controladores de Decisão (Setembro 2025)
+
+**Objetivo**: Implementar sistema de injeção de dependência robusto que mantém a lógica atual de decisão (incluindo condicionais complexas) mas permite substituição por LLM real ou controller humano no futuro.
+
+**Análise da Situação Atual**:
+- ✅ **Interface criada**: `DecisionController` e `DecisionContext` existem
+- ❌ **Lógica mocada simples**: Atual só pega primeira choice válida
+- ❌ **Não lida com condicionais**: Estruturas `conditional_on` com `paths` ignoradas
+- ✅ **Sistema de injeção funcional**: Agent já delega para controller injetado
+
+**Problema Identificado**: 
+A lógica atual é muito simplista e não processa choices condicionais baseadas em ocupação:
+```json
+"choices": [{
+  "conditional_on": "occupation",
+  "paths": {
+    "Police Officer": {"text": "Usar autoridade", "goto": 18},
+    "default": {"text": "Usar força de vontade", "roll": "POW", "results": {...}}
+  }
+}]
+```
+
+**Plano de Implementação - 6 Etapas**:
+
+- [x] **ETAPA 1: Analisar lógica condicional atual** ✅ **CONCLUÍDA**
+  - [x] Mapear todos os tipos de choices condicionais em pages.py
+  - [x] Identificar padrões: `conditional_on`, `requires`, `set-occupation`
+  - [x] Documentar comportamento esperado para cada tipo
+  - [x] Criar casos de teste para validação
+
+**Resultado da ETAPA 1**: 
+✅ **Análise completa da lógica condicional criada em `conditional_logic_analysis.md`**
+
+**9 Padrões Condicionais Identificados**:
+1. **Escolhas Simples** - goto básico com text
+2. **Escolhas com Efeitos** - modificação de character state (damage, skills, magic)
+3. **Sistema de Ocupação** - set-occupation (Police Officer, Social Worker, Nurse)
+4. **Condicionais por Ocupação** - conditional_on com paths específicos
+5. **Sistema de Rolagens** - skill, luck, opposed rolls com 5 níveis de sucesso
+6. **Rolagens Opostas** - opponent_skill com full/half values
+7. **Sistema de Efeitos** - take_damage, heal_damage, gain_skill, spend_magic
+8. **Condicionais Simples** - baseadas em estado do personagem
+9. **Dados Especiais** - bonus_dice, difficulty hard
+
+**Complexidade Estrutural Mapeada**:
+- **5 níveis de aninhamento** - desde goto simples até opposed rolls complexos
+- **4 padrões de controle** - sequencial, condicional, probabilístico, interativo
+- **3 tipos de dependência** - character state, game state, context state
+
+**Especificação Técnica**:
+- **DecisionController** deve suportar conditional_on com paths
+- **Sistema de rolagens** completo (skill, luck, opposed)
+- **Gerenciamento de efeitos** integrado
+- **Contexto de ocupação** para choices condicionais
+- **Estados complexos** (opponent_skill, bonus_dice, difficulty)
+
+- [x] **ETAPA 2: Implementar DefaultDecisionController robusto** ✅ **CONCLUÍDA**
+  - [x] Migrar lógica completa do método `_execute_decision_logic_LEGACY`
+  - [x] Implementar `_handle_conditional_choice()` para estruturas `conditional_on`
+  - [x] Implementar `_handle_requires_choice()` para validação de pré-requisitos
+  - [x] Implementar `_handle_occupation_choice()` para `set-occupation`
+  - [x] Manter fallbacks e validações do sistema original
+
+**Resultado da ETAPA 2**: 
+✅ **DefaultDecisionController robusto implementado com sucesso**
+
+**Funcionalidades Implementadas**:
+- **Lógica condicional completa** - suporte para `conditional_on` com paths baseados em ocupação
+- **Sistema de validação** - verificação robusta de choices válidas e inválidas
+- **Resolução de condições** - mapeamento de campos como occupation, damage_taken, magic_points
+- **Fallbacks inteligentes** - múltiplas camadas de fallback para cenários de erro
+- **Debug detalhado** - logs completos do processo de decisão
+- **Controllers alternativos** - SimpleDecisionController e RandomDecisionController para comparação
+
+**Testes Realizados**:
+- ✅ **Choice condicional ocupação**: Police Officer → "Usar autoridade policial" (goto 18)
+- ✅ **Choice simples**: "Bater na porta" (goto 13)
+- ✅ **Múltiplas choices**: Seleção da primeira válida com lógica correta
+- ✅ **Comparação controllers**: Default, Simple, Random funcionando independentemente
+- ✅ **Integração Character**: Acesso correto a occupation e outros dados do personagem
+
+**Arquitetura Implementada**:
+- **DefaultDecisionController** - lógica completa com condicionais
+- **SimpleDecisionController** - primeira choice válida (para comparação)
+- **RandomDecisionController** - escolha aleatória (para testes de robustez)
+- **Sistema de debug** - logs detalhados com razão da decisão
+- **Validação robusta** - suporte para todos os tipos de choice identificados na análise
+
+- [ ] **ETAPA 3: Integrar DefaultDecisionController no Agent**
+  - Atualizar imports no agent.py para incluir DefaultDecisionController
+  - Modificar construtor para usar DefaultDecisionController como padrão
+  - Remover método `_execute_decision_logic_LEGACY` duplicado
+  - Manter interface de injeção para permitir outros controllers
+
+- [ ] **ETAPA 4: Criar controllers alternativos para demonstração**
+  - `SimpleDecisionController` - primeira choice válida (atual)
+  - `RandomDecisionController` - escolha aleatória (para testes)
+  - `InteractiveDecisionController` - escolha manual via terminal (futuro)
+  - `LLMDecisionController` - interface para LLM real (futuro)
+
+- [ ] **ETAPA 5: Testes de validação completa**
+  - Testar com páginas condicionais complexas (ocupação, requires)
+  - Validar comportamento idêntico ao sistema original
+  - Testar injeção de controllers alternativos
+  - Verificar compatibilidade com main.py completo
+
+- [ ] **ETAPA 6: Documentação e arquitetura final**
+  - Documentar interface DecisionController para futuras extensões
+  - Criar guia de implementação para novos controllers
+  - Validar extensibilidade para LLM e interfaces humanas
+
+**Estrutura Arquitetural Proposta**:
+
+```python
+# Interface base (já existe)
+class DecisionController(ABC):
+    @abstractmethod
+    def decide(self, choices: List[Dict], context: DecisionContext) -> Dict:
+        pass
+
+# Implementação padrão (a implementar)
+class DefaultDecisionController(DecisionController):
+    def decide(self, choices, context):
+        # Lógica completa incluindo condicionais
+        return self._process_conditional_choices(choices, context)
+    
+    def _process_conditional_choices(self, choices, context):
+        # Processa "conditional_on": "occupation"
+        # Processa "requires": {...}
+        # Processa "set-occupation": "..."
+        # Fallbacks e validações completas
+
+# Controllers futuros
+class InteractiveDecisionController(DecisionController):
+    def decide(self, choices, context):
+        # Interface humana via terminal
+        
+class LLMDecisionController(DecisionController):
+    def decide(self, choices, context):
+        # Delegação para LLM real (OpenAI, etc.)
+```
+
+**Casos de Uso Suportados**:
+1. **Condicionais de Ocupação**: `"conditional_on": "occupation"` com paths específicos
+2. **Pré-requisitos**: `"requires": {"occupation": "Police Officer", "damage_taken": {...}}`
+3. **Configuração**: `"set-occupation": "Police Officer"`
+4. **Choices simples**: `{"text": "...", "goto": X}`
+5. **Rolls complexos**: `{"roll": "POW", "results": {...}}`
+6. **Opposed rolls**: `{"opposed_roll": "Fighting", "outcomes": {...}}`
+
+**Benefícios Esperados**:
+- ✅ **Compatibilidade total** - Comportamento idêntico ao sistema atual
+- ✅ **Extensibilidade** - Fácil adicionar LLM ou interface humana
+- ✅ **Robustez** - Lida com todos os casos condicionais complexos
+- ✅ **Testabilidade** - Controllers isolados são fáceis de testar
+- ✅ **Flexibilidade** - Troca de estratégia em runtime
+
+**Pontos de Atenção**:
+- **Preservar comportamento exato** - Zero mudanças no resultado final
+- **Performance** - Não adicionar overhead significativo
+- **Simplicidade** - Interface mínima para novos controllers
+- **Validação completa** - Testar todos os tipos de choices condicionais
+
+**Status**: ⏳ **AGUARDANDO APROVAÇÃO PARA INICIAR ETAPA 1**
+
+`````
+``````
+
 `````

@@ -1568,18 +1568,18 @@ class Character:
                 f"Magic: {magic['current']}/{magic['starting']}")
     
     # Métodos de gerenciamento de histórico
-    def add_to_history(self, page_id: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None):
+    def add_to_history(self, page_number: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None):
         """
         Adiciona uma entrada ao histórico de decisões.
         
         Args:
-            page_id: ID da página onde a decisão foi tomada
+            page_number: Número da página onde a decisão foi tomada
             page_text: Texto da página onde a decisão foi tomada
             choice_made: Objeto choice completo que foi escolhido
             choice_index: Índice da escolha (opcional)
         """
         history_entry = {
-            'page_id': page_id,
+            'page_number': page_number,
             'page_text': page_text,
             'choice_made': choice_made,
             'choice_index': choice_index

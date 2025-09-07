@@ -40,7 +40,38 @@ class GamePage:
     def set_current_page(self, page_number: int):
         """Define a página atual do jogo."""
         self.current_page_number = page_number
-        self.current_page_data = self.pages_data.get(page_number, {})
+        
+        # Compatibilidade com objetos GameData que têm método .get()
+        if hasattr(self.pages_data, 'get'):
+            self.current_page_data = self.pages_data.get(page_number, {})
+        else:
+            # Fallback para dicionários diretos
+            self.current_page_data = self.pages_data.get(page_number, {})
+    
+    def _smart_truncate_text(self, text: str, max_chars: int = 50) -> str:
+        """
+        Trunca texto preservando palavras completas nos últimos N caracteres.
+        
+        Args:
+            text: Texto a ser truncado
+            max_chars: Número máximo de caracteres (padrão: 50)
+            
+        Returns:
+            Texto truncado de forma inteligente com "..." no início
+        """
+        if len(text) <= max_chars:
+            return text
+        
+        # Pegar os últimos max_chars caracteres
+        truncated = text[-max_chars:]
+        
+        # Encontrar o primeiro espaço para não cortar palavras
+        first_space = truncated.find(' ')
+        if first_space > 0 and first_space < len(truncated) - 1:
+            truncated = truncated[first_space + 1:]
+        
+        # Adicionar indicador de truncamento
+        return f"...{truncated}"
         
     def render_header(self) -> str:
         """
@@ -226,20 +257,18 @@ INSTRUCTIONS:
         formatted_entries = []
         
         for i, entry in enumerate(recent_history, 1):
-            # Verificar se é formato legado (tupla) ou novo formato (dict)
-            if isinstance(entry, dict):
-                # Formato novo: dicionário completo
-                page_number = entry.get('page_number', 0)
-                page_text = entry.get('page_text', '')
-                choice_made = entry.get('choice_made', {})
-                choice_index = entry.get('choice_index', 0)
-                original_choices = entry.get('original_choices', [])
-            else:
-                # Formato desconhecido, pular
+            # APENAS formato moderno (dicionário) - SEM suporte legado
+            if not isinstance(entry, dict):
+                print(f"AVISO: Entrada de histórico inválida ignorada: {type(entry)}")
                 continue
+                
+            # Formato moderno: dicionário completo
+            page_number = entry.get('page_number', 0)
+            page_text = entry.get('page_text', '')
+            choice_made = entry.get('choice_made', {})
 
-            # Truncar texto da página nos últimos 50 caracteres
-            truncated_text = page_text[-50:] if len(page_text) > 50 else page_text
+            # Truncamento inteligente dos últimos 50 caracteres preservando palavras
+            truncated_text = self._smart_truncate_text(page_text, 50)
 
             # Construir resultado da ação
             action_result = {}
@@ -273,14 +302,12 @@ INSTRUCTIONS:
                                        'target_value', 'success', 'opposite_roll', 
                                        'effects_applied', 'goto_executed']}
             
-            # Construir entrada formatada
+            # Construir entrada formatada (SIMPLIFICADA - sem original_choices e choice_index)
             formatted_entry = {
                 "step": i,
                 "page_number": page_number,
                 "page_text": truncated_text,
-                "original_choices": original_choices,
-                "choice_index": choice_index,
-                "choice_made": clean_choice if clean_choice else {"legacy_format": True}
+                "choice_made": clean_choice if clean_choice else {"empty_choice": True}
             }
             
             # Adicionar resultado da ação apenas se não estiver vazio

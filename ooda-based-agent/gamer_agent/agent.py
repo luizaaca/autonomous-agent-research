@@ -1,5 +1,3 @@
-import random
-import pages
 from character import Character
 from cockpit import GamePage
 from decision_controller import DecisionController, DecisionContext
@@ -26,6 +24,31 @@ class Agent:
 
     def __repr__(self):
         return f"Agent(Name: {self.character.name}, Occupation: {self.character.occupation})"
+
+    def _smart_truncate_text(self, text: str, max_chars: int = 200) -> str:
+        """
+        Trunca texto preservando palavras completas nos últimos N caracteres.
+        
+        Args:
+            text: Texto a ser truncado
+            max_chars: Número máximo de caracteres (padrão: 200)
+            
+        Returns:
+            Texto truncado de forma inteligente com "..." no início
+        """
+        if len(text) <= max_chars:
+            return text
+        
+        # Pegar os últimos max_chars caracteres
+        truncated = text[-max_chars:]
+        
+        # Encontrar o primeiro espaço para não cortar palavras
+        first_space = truncated.find(' ')
+        if first_space > 0 and first_space < len(truncated) - 1:
+            truncated = truncated[first_space + 1:]
+        
+        # Adicionar indicador de truncamento
+        return f"...{truncated}"
 
     def _validate_choices(self, choices):
         """Valida se a lista de choices está em formato correto."""
@@ -69,138 +92,10 @@ class Agent:
             print("=" * 50)
         
         return chosen_choice
-    
-    # MÉTODO LEGACY - Mantido para referência, substituído por DecisionController
-    def _execute_decision_logic_LEGACY(self, choices):
-        """
-        Executa a lógica interna de decisão separada da visualização.
-        """
-        choosen_choice = None
-        
-        try:
-            for choice in choices:
-                # Validação individual da choice
-                if not isinstance(choice, dict):
-                    print(f"AVISO: Choice inválida (não é dicionário): {choice}. Pulando.")
-                    continue
-                
-                # Trata escolhas condicionais (estrutura especial com conditional_on)
-                if "conditional_on" in choice:
-                    if choice["conditional_on"] == "occupation":
-                        paths = choice.get("paths")
-                        occupation = self.sheet["info"]["occupation"] or "default"
-
-                        print(f"Conditions Applied: Path choices based on occupation: {paths} for occupation {occupation}")
-                        if not isinstance(paths, dict):
-                            print(f"ERRO: 'paths' deve ser um dicionário: {paths}.")
-                            raise Exception("Invalid paths format")
-                
-                        # Verifica se há um caminho específico para a ocupação atual
-                        if occupation in paths:
-                            selected_path = paths[occupation]
-                            print(f"Agente decidiu com base na ocupação ({occupation}): {selected_path}")
-                            choosen_choice = selected_path
-                        # Usa o caminho padrão se não houver específico
-                        elif "default" in paths:
-                            selected_path = paths["default"]
-                            print(f"Agente decidiu pelo caminho padrão da ocupação: {selected_path}")
-                            choosen_choice = selected_path
-                        else:
-                            print(f"AVISO: Nenhum caminho válido para ocupação '{occupation}' e sem caminho padrão.")
-                            raise Exception("No valid path for occupation and no default path")
-                if choosen_choice:
-                    return choosen_choice
-                
-                # Validar se a choice padrão tem campos mínimos necessários
-                if not any(field in choice for field in ["goto", "roll", "opposed_roll", "luck_roll"]):
-                    raise Exception("Choice inválida: campos obrigatórios ausentes.")
-
-                # Há opção de definir ocupação, definir com base na ficha. Alterar futuramente para apenas validar escolha do llm, ou seja, se escolha está na lista fornecida.
-                if "set-occupation" in choice:
-                    if choice["set-occupation"] == self.sheet["info"]["occupation"]:
-                        print(f"Agente decidiu pela opção de definir ocupação já existente: {choice}")
-                        return choice
-                    else:
-                        print(f"AVISO: Opção de definir ocupação não corresponde à ocupação atual. Pulando choice: {choice}")
-                        continue
-
-                if "requires" in choice:
-                    # Avalia as condições em 'requires'
-                    requires = choice.get("requires")
-                    if not isinstance(requires, dict):
-                        print(f"AVISO: 'requires' deve ser um dicionário: {requires}. Pulando choice.")
-                        continue
-            
-                    conditions_met = True
-                    for key, value in requires.items():
-                        try:
-                            # Condição de ocupação
-                            if key == "occupation":
-                                if not isinstance(value, str):
-                                    print(f"AVISO: Valor de ocupação deve ser string: {value}")
-                                    conditions_met = False
-                                    break
-                                if self.sheet["info"]["occupation"] != value:
-                                    conditions_met = False
-                                    break
-                            # Condição de dano
-                            elif key == "damage_taken":
-                                if not isinstance(value, dict):
-                                    print(f"AVISO: Condição damage_taken deve ser dicionário: {value}")
-                                    conditions_met = False
-                                    break
-                                min_damage = value.get("min", 0)
-                                max_damage = value.get("max", float('inf'))
-                                if not isinstance(min_damage, (int, float)) or not isinstance(max_damage, (int, float)):
-                                    print(f"AVISO: Valores min/max de damage_taken devem ser numéricos")
-                                    conditions_met = False
-                                    break
-                                current_damage = self.sheet["status"]["damage_taken"]
-                                if not (min_damage <= current_damage <= max_damage):
-                                    conditions_met = False
-                                    break
-                            # Adicionar outras verificações de condição aqui, se necessário
-                            else:
-                                print(f"AVISO: Condição desconhecida '{key}' em requires. Ignorando.")
-                        except Exception as e:
-                            print(f"ERRO ao avaliar condição '{key}': {e}")
-                            conditions_met = False
-                            break
-            
-                    # Se todas as condições forem atendidas, escolhe esta opção
-                    if conditions_met:
-                        # Validar se a choice tem campos necessários antes de retornar
-                        if any(field in choice for field in ["goto", "roll", "opposed_roll", "luck_roll"]):
-                            print(f"Agente decidiu com base em pré-requisitos: {choice}")
-                            return choice
-                        else:
-                            print(f"AVISO: Choice com pré-requisitos atendidos não tem ação válida: {choice}")
-                
-                if "goto" in choice and isinstance(choice["goto"], int) and choice["goto"] > 0:
-                    # Marca como possível escolha padrão
-                    if not choosen_choice:
-                        choosen_choice = choice
-
-                # Se nenhuma escolha com pré-requisitos foi satisfeita, usa a padrão
-                if choosen_choice:
-                    print(f"Agente decidiu pela opção: {choosen_choice}")
-                    return choosen_choice
-                
-                # Se não há escolha padrão válida, pega a primeira choice da lista que tenha ação válida
-                for choice in choices:
-                    if isinstance(choice, dict) and any(field in choice for field in ["goto", "roll", "opposed_roll", "luck_roll"]):
-                        print(f"Agente usando primeira choice válida como fallback: {choice}")
-                        return choice
-        except Exception as e:
-            print(f"ERRO CRÍTICO durante decisão: {e}")
-    
-        # Fallback de segurança final
-        print("ERRO: Nenhuma choice válida encontrada. Usando fallback de segurança.")
-        return self._create_fallback_choice()
-
+    #Não tem fallback deve ser reenviada para o agente decisorio novamente com historico atualizado
     def _create_fallback_choice(self):
         """Cria uma choice de segurança para situações de erro."""
-        return {"goto": 1, "text": "Fallback: Retornar ao início"}
+        raise Exception("Fallback choice should not be used in this implementation.")
 
     def _process_effects(self, effects):
         """
@@ -720,8 +615,8 @@ class Agent:
         
         # Adicionar ao histórico detalhado via Character
         self.character.add_to_history(
-            page_id=self.current_page,
-            page_text=page_text[:200] + "..." if len(page_text) > 200 else page_text,
+            page_number=self.current_page,
+            page_text=self._smart_truncate_text(page_text, 200),
             choice_made=choice_with_outcome,
             choice_index=choice_index
         )
