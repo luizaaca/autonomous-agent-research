@@ -45,7 +45,15 @@ PAGES = {
     6: {
         "text": 'A masonry hammer pushes the glass inwards. Spiky fragments fall to the floor among the crockery. The heavy metal head runs around the frame, clearing the remaining spikes before its wielder steps through. He is a square and yobbish twentysomething with a bent nose, tattooed knuckles, and cold eyes. "I told you there\'d be consequences, Genie. You can\'t just borrow money and not pay it back." Knuckles notices the crockery on the floor. "Strewth. Some other mob get here before us?" A second man steps through the window, with a flat cap, a bad goatee, and a missing incisor. He points at you. "Who\'s this?" "A witness," Knuckles says. He hefts the hammer and steps towards you. His body language says he is looking for a chance to use it. "Beat it," he snarls.',
         "choices": [
-            {"text": "Se você é um Policial, identifique-se", "goto": 19},
+            {
+                "conditional_on": "occupation",
+                "paths": {
+                    "Police Officer": {
+                        "text": "Identifique-se como Policial",
+                        "goto": 19,
+                    }
+                }
+            },
             {"text": "Lançar feitiço Impello", "goto": 26},
             {"text": "Lançar feitiço Scindere", "goto": 69},
             {"text": "Enfrentar o agressor fisicamente", "goto": 4},
@@ -437,19 +445,48 @@ PAGES = {
     43: {
         "text": "Knuckles is a little too slow this time. You catch his forearm and immobilise it. If you already had Knuckles restrained, and you are a Police Officer, go to 105. If you already had Knuckles restrained, and you are a Nurse or Social Worker, go to 84. Otherwise, continue the combat, but give Knuckles a penalty dice for the remainder of the fight. You may attempt a further combat manoeuvre to restrain Knuckles completely.",
         "choices": [
-            {"text": "Se Knuckles já estava contido e você é Policial", "goto": 105},
             {
-                "text": "Se Knuckles já estava contido e você é Enfermeiro ou Assistente Social",
-                "goto": 84,
+                "conditional_on": "occupation",
+                "paths": {
+                    "Police Officer": {
+                        "text": "Knuckles já estava contido - usar autoridade policial",
+                        "goto": 105,
+                        "requires": "knuckles_restrained"
+                    },
+                    "Nurse": {
+                        "text": "Knuckles já estava contido - usar conhecimento médico",
+                        "goto": 84,
+                        "requires": "knuckles_restrained"
+                    },
+                    "Social Worker": {
+                        "text": "Knuckles já estava contido - usar habilidades sociais",
+                        "goto": 84,
+                        "requires": "knuckles_restrained"
+                    },
+                    "default": {
+                        "text": "Continuar o combate",
+                        "goto": 16,
+                    }
+                }
             },
-            {"text": "Caso contrário, continuar o combate", "goto": 16},
         ],
     },
     44: {
         "text": "You vault the wall, but your foot snags on a shrub and you topple down the far side of the gate. Your wrist bends back at impact.",
         "choices": [
-            {"text": "Se você é Enfermeiro", "goto": 55},
-            {"text": "Caso contrário", "goto": 60},
+            {
+                "conditional_on": "occupation",
+                "paths": {
+                    "Nurse": {
+                        "text": "Usar conhecimento médico para tratar o ferimento",
+                        "goto": 55,
+                    },
+                    "default": {
+                        "text": "Suportar a dor e continuar",
+                        "goto": 60,
+                    }
+                }
+            },
         ],
     },
     45: {
@@ -667,16 +704,25 @@ PAGES = {
     74: {
         "text": 'Mrs Fellaman steps up to the pavement, brandishing her willow-and-linseed-oil weapon with serious intent. "I told you boys I\'m not paying!" she yells, scanning in both directions. A passing cyclist swerves, narrowly missing the Escort. She notices Ernie and steps closer to the car, eyeing the hairy terror. For a moment you visualise the paperwork that will result if the pensioner you were supposed to be protecting initiated an armed brawl with a stray dog you had acquired. Then she turns around and spots you on the stairs. Her jaw sets.',
         "choices": [
-            {"text": "Se você é Assistente Social", "goto": 79},
             {
-                "roll": "Social",
-                "results": {
-                    "5": {"goto": 83},
-                    "4": {"goto": 83},
-                    "3": {"goto": 87},
-                    "2": {"goto": 91},
-                    "1": {"goto": 91},
-                },
+                "conditional_on": "occupation",
+                "paths": {
+                    "Social Worker": {
+                        "text": "Usar habilidades de assistente social para acalmar a situação",
+                        "goto": 79,
+                    },
+                    "default": {
+                        "text": "Tentar acalmar usando habilidades sociais gerais",
+                        "roll": "Social",
+                        "results": {
+                            "5": {"goto": 83},
+                            "4": {"goto": 83},
+                            "3": {"goto": 87},
+                            "2": {"goto": 91},
+                            "1": {"goto": 91},
+                        },
+                    }
+                }
             },
         ],
     },

@@ -7,7 +7,7 @@
 
 ## 1. Visão Geral
 
-Este documento detalha a arquitetura e as especificações para um sistema de agente de jogo avançado. O objetivo é criar uma estrutura robusta e extensível que suporte múltiplos modos de interação (demonstração, jogador humano e IA via LLM) e que seja baseada em uma análise completa das mecânicas do jogo "Rivers of London".
+Este documento detalha a arquitetura e as especificações para um sistema de agente de jogo avançado. O objetivo é criar uma estrutura robusta e extensível que suporte múltiplos modos de interação (demonstração, jogador humano e IA via LLM) e que seja baseada em uma análise completa das mecânicas do jogo "The Domestic".
 
 O design segue as melhores práticas de desenvolvimento de software e jogos, incluindo a separação de responsabilidades, o uso de padrões de design como **Repository** e **Dependency Injection**, e a criação de uma especificação detalhada da ficha de personagem e da lógica condicional do jogo.
 
@@ -121,56 +121,58 @@ O fluxo de decisão principal segue o ciclo OODA, com a interação do `PlayerIn
 [main.py]          [Agent]               [Character]     [PlayerInputAdapter]
     │                  │                      │                    │
     │ agent.run()      │                      │                    │
-    │─────────────────▶│                      │                    │
+    │─────────────────>│                      │                    │
     │                  │                      │                    │
-    │                  │◀──────────────────────────────────────────┐
+    │                  │<──────────────────────────────────────────┐
     │                  │ Loop: Ciclo OODA     │                    │
     │                  │                      │                    │
     │                  │ 1.Observe (Lê estado)│                    │
-    │                  │─────────────────────▶│                    │
-    │                  │◀─────────────────────│                    │
+    │                  │─────────────────────>│                    │
+    │                  │<─────────────────────│                    │
     │                  │                      │                    │
     │                  │ 2. Orient (Prepara cockpit)               │
-    │                  │─────────────────────▶│                    │
-    │                  │◀─────────────────────│                    │
+    │                  │─────────────────────>│                    │
+    │                  │<─────────────────────│                    │
     │                  │                      │                    │
     │                  │ 3. Decide (get_decision) → returns int    │
-    │                  │──────────────────────────────────────────▶│
+    │                  │──────────────────────────────────────────>│
     │                  │                      │ Renderiza cockpit  │
     │                  │                      │ e obtém input      │
-    │                  │                      │◀───────────────────│        
-    │                  │                      │───────────────────▶│        
+    │                  │                      │<───────────────────│        
+    │                  │                      │───────────────────>│        
     │                  │                      │                    │
     │                  │ Retorna choice_index (int)                │
-    │                  │◀------------------------------------------│
+    │                  │<------------------------------------------│
     │                  │                      │                    │
     │                  │ 4. Get choice dict: choices[index-1]      │
-    │                  │─────────────────────▶│                    │
+    │                  │─────────────────────>│                    │
     │                  │                      │                    │
-    │                  │ 5. Valida Escolha + Processa Efeitos     │
-    │                  │◀─────────────────────┐                    │
-    │                  │─────────────────────▶│                    │
+    │                  │ 5. Valida Escolha + Processa Efeitos      │
+    │                  │<─────────────────────┐                    │
+    │                  │─────────────────────>│                    │
     │                  │                      │                    │
     │                  │┌─────────────────────────────────────────┐│
+    │                  ││ AGENT                                   ││
     │                  ││ alt: Escolha Inválida                   ││
     │                  ││                                         ││
     │                  ││ add_history_log("Erro...")              ││
     │                  ││─────┐                                   ││
-    │                  ││ ◀───┘                                   ││
+    │                  ││ <───┘                                   ││
     │                  ││ (Reinicia o ciclo na mesma página)      ││
     │                  │└─────────────────────────────────────────┘│
     │                  │┌─────────────────────────────────────────┐│
+    │                  ││ AGENT                                   ││
     │                  ││ else: Escolha Válida                    ││
     │                  ││                                         ││
     │                  ││ 6. Act (Aplica efeitos + set-occupation)││
     │                  ││─────┐                                   ││
-    │                  ││ ◀───┘                                   ││
+    │                  ││ <───┘                                   ││
     │                  ││                                         ││
     │                  ││ (Avança para próxima página)            ││
     │                  │└─────────────────────────────────────────┘│
     │                  │                                           │
-    │                  └───────────────────────────────────────────┘
-    │                  │                      │                    │
+    │                  │─────────────────────END───────────────────│
+    │                                                             
 ```
 
 Este fluxo garante que o `Agent` mantenha a autoridade sobre a lógica e as regras do jogo, enquanto os `Adapters` focam exclusivamente na responsabilidade de interface com o jogador (seja ele um script, um humano ou uma IA).
@@ -312,8 +314,10 @@ O fluxo do jogo é determinado por uma série de escolhas e condições. A anál
   - `{"luck_roll": true, "results": {...}}}`
 - **Rolagem Oposta**: Uma disputa entre o personagem e um oponente.
   - `{"opposed_roll": "Fighting", "opponent_skill": {...}, "outcomes": {"win": {...}, "lose": {...}}}`
-- **Escolha com Pré-requisitos (Implícita)**: O texto da escolha sugere uma condição que não é validada mecanicamente, mas que o jogador deve seguir. (VAMOS CRIAR UM REGEX PARA ENCONTRAR TODOS OS CASOS E AJUSTAR PARA OS PADROES ACIMA DE FORMA QUE SEJAM COMPATIVEIS COM O CHARACTER E OS CONTROLLERS)
-  - `{"text": "Se você é um Policial, identifique-se", "goto": 19}` 
+- **Escolha com Pré-requisitos (Implícita)**: ✅ **CORRIGIDO EM v1.2** - Convertido para `conditional_on` pattern.
+  - **Antes**: `{"text": "Se você é um Policial, identifique-se", "goto": 19}` 
+  - **Agora**: `{"conditional_on": "occupation", "paths": {"Police Officer": {...}, "default": {...}}}`
+  - **Páginas Atualizadas**: 6, 43, 44, 74 
 
 ### 4.2. Ações e Efeitos (`effects`)
 
@@ -393,7 +397,7 @@ class PlayerInputAdapter(ABC):
 #### c) `LLMPlayerAdapter`
 - **Propósito**: Permitir que um agente de IA (LLM) jogue o jogo.
 - **Lógica**:
-    1.  Recebe o `cockpit_state`, que já é um prompt formatado para LLMs.
+    1.  Recebe o `cockpit_state`, que já é um prompt formatado para LLMs (compactar visualizaçao adotando informações em tabelas).
     2.  Envia este prompt para uma API de LLM (e.g., Google AI, OpenAI).
     3.  Aguarda a resposta da API.
     4.  Processa a resposta para extrair um único número correspondente à escolha.

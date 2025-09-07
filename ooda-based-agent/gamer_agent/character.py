@@ -36,6 +36,71 @@ class Character:
         """
         self._sheet = self._create_base_sheet()
         self.setup(name, occupation, age, backstory)
+
+    def _initialize_random_stats(self):
+        """
+        Inicializa os atributos e recursos do personagem com valores aleatórios
+        baseado nas regras de "The Domestic" (3d6 * 5).
+        """
+        # Características: 3d6 * 5
+        for char in self.sheet["characteristics"]:
+            roll = sum(random.randint(1, 6) for _ in range(3)) * 5
+            self.set_characteristic(char, roll)
+
+        # Sorte: (2d6 + 6) * 5
+        luck_roll = (sum(random.randint(1, 6) for _ in range(2)) + 6) * 5
+        self.sheet["resources"]["luck"]["starting"] = luck_roll
+        self.sheet["resources"]["luck"]["current"] = luck_roll
+
+        # Pontos de Magia: POW / 5
+        pow_value = self.sheet["characteristics"]["POW"]["full"]
+        magic_points = pow_value // 5
+        self.set_magic_points(magic_points)
+
+    def set_occupation(self, occupation: str):
+        """
+        Define a ocupação do personagem e ajusta os atributos e habilidades
+        correspondentes.
+        """
+        self.sheet["info"]["occupation"] = occupation
+
+        if occupation == "Police Officer":
+            self.set_characteristic("STR", 65)
+            self.set_characteristic("CON", 60)
+            self.set_characteristic("DEX", 55)
+            self.set_characteristic("INT", 55)
+            self.set_characteristic("POW", 60)
+            self.set_skill("Athletics", 60, "common")
+            self.set_skill("Drive", 60, "common")
+            self.set_skill("Social", 60, "common")
+            self.set_skill("Fighting", 60, "combat")
+            self.set_skill("Firearms", 60, "combat")
+            self.set_skill("Law", 60, "expert")
+        elif occupation == "Social Worker":
+            self.set_characteristic("STR", 50)
+            self.set_characteristic("CON", 55)
+            self.set_characteristic("DEX", 50)
+            self.set_characteristic("INT", 70)
+            self.set_characteristic("POW", 65)
+            self.set_skill("Observation", 60, "common")
+            self.set_skill("Research", 60, "common")
+            self.set_skill("Social", 70, "common")
+        elif occupation == "Nurse":
+            self.set_characteristic("STR", 50)
+            self.set_characteristic("CON", 60)
+            self.set_characteristic("DEX", 60)
+            self.set_characteristic("INT", 65)
+            self.set_characteristic("POW", 60)
+            self.set_skill("Observation", 70, "common")
+            self.set_skill("Read Person", 60, "common")
+            self.set_skill("Social", 60, "common")
+            self.set_skill("Medicine", 70, "expert")
+        
+        # Ajustar magic points baseado no POW real da ocupação
+        actual_pow = self.sheet["characteristics"]["POW"]["full"]
+        self.set_magic_points(actual_pow // 5)
+        
+        print(f"Occupation set to {occupation}. Stats and skills updated.")
     
     def _create_base_sheet(self) -> Dict[str, Any]:
         """
@@ -92,113 +157,27 @@ class Character:
             "page_history": []
         }
     
-    def setup(self, name: str, occupation: str, age: int = 30, backstory: str = ""):
+    def setup(self, name: str, occupation: Optional[str], age: int = 30, backstory: str = ""):
         """
-        Configura o personagem com informações básicas e ajusta atributos baseados na ocupação.
-        
-        Args:
-            name: Nome do personagem
-            occupation: Ocupação/profissão do personagem
-            age: Idade do personagem (padrão: 30)
-            backstory: História de fundo do personagem
+        Configura o estado inicial do personagem, incluindo atributos aleatórios
+        e habilidades base. A ocupação define os bônus específicos.
         """
-        # Configurações básicas
+        # Configurações básicas de informação
         self.sheet["info"]["name"] = name
-        self.sheet["info"]["occupation"] = occupation
         self.sheet["info"]["age"] = age
         self.sheet["info"]["backstory"] = backstory
         
-        # Calcular e definir recursos iniciais
-        import random
+        # 1. Inicializa atributos com valores aleatórios
+        self._initialize_random_stats()
         
-        # Sorte inicial (2d10 + 50)
-        luck_roll = random.randint(1, 10) + random.randint(1, 10) + 50
-        self.sheet["resources"]["luck"]["starting"] = luck_roll
-        self.sheet["resources"]["luck"]["current"] = luck_roll
+        # 2. Garante que a habilidade Mágica SEMPRE seja inicializada
+        self.set_skill("Magic", 50, "expert")
         
-        # Magic Points iniciais baseados em POW (assumindo POW padrão de 60 para agentes)
-        default_pow = 60
-        magic_points = default_pow
-        self.sheet["resources"]["magic_pts"]["starting"] = magic_points
-        self.sheet["resources"]["magic_pts"]["current"] = magic_points
+        # 3. Se uma ocupação inicial for fornecida, aplica seus bônus
+        if occupation:
+            self.set_occupation(occupation)
         
-        # Configurar características baseadas na ocupação
-        if occupation == "Police Officer":
-            # Características melhoradas para policial
-            self.sheet["characteristics"]["STR"] = {"full": 65, "half": 32}
-            self.sheet["characteristics"]["CON"] = {"full": 60, "half": 30}
-            self.sheet["characteristics"]["DEX"] = {"full": 55, "half": 27}
-            self.sheet["characteristics"]["INT"] = {"full": 55, "half": 27}
-            self.sheet["characteristics"]["POW"] = {"full": 60, "half": 30}
-            
-            # Ajustar magic points baseado no POW real
-            actual_pow = self.sheet["characteristics"]["POW"]["full"]
-            self.sheet["resources"]["magic_pts"]["starting"] = actual_pow
-            self.sheet["resources"]["magic_pts"]["current"] = actual_pow
-            
-            # Perícias aprimoradas para policial
-            self.sheet["skills"]["common"]["Athletics"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["common"]["Drive"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["common"]["Social"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["combat"]["Fighting"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["combat"]["Firearms"] = {"full": 60, "half": 30}
-            
-            # Perícias especializadas
-            self.sheet["skills"]["expert"]["Law"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
-            
-        elif occupation == "Social Worker":
-            # Características para assistente social
-            self.sheet["characteristics"]["STR"] = {"full": 50, "half": 25}
-            self.sheet["characteristics"]["CON"] = {"full": 55, "half": 27}
-            self.sheet["characteristics"]["DEX"] = {"full": 50, "half": 25}
-            self.sheet["characteristics"]["INT"] = {"full": 70, "half": 35}
-            self.sheet["characteristics"]["POW"] = {"full": 65, "half": 32}
-            
-            # Ajustar magic points baseado no POW
-            actual_pow = self.sheet["characteristics"]["POW"]["full"]
-            self.sheet["resources"]["magic_pts"]["starting"] = actual_pow
-            self.sheet["resources"]["magic_pts"]["current"] = actual_pow
-            
-            # Perícias aprimoradas
-            self.sheet["skills"]["common"]["Observation"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["common"]["Research"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["common"]["Social"] = {"full": 70, "half": 35}
-            self.sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
-            
-        elif occupation == "Nurse":
-            # Características para enfermeiro/a
-            self.sheet["characteristics"]["STR"] = {"full": 50, "half": 25}
-            self.sheet["characteristics"]["CON"] = {"full": 60, "half": 30}
-            self.sheet["characteristics"]["DEX"] = {"full": 60, "half": 30}
-            self.sheet["characteristics"]["INT"] = {"full": 65, "half": 32}
-            self.sheet["characteristics"]["POW"] = {"full": 60, "half": 30}
-            
-            # Ajustar magic points baseado no POW
-            actual_pow = self.sheet["characteristics"]["POW"]["full"]
-            self.sheet["resources"]["magic_pts"]["starting"] = actual_pow
-            self.sheet["resources"]["magic_pts"]["current"] = actual_pow
-            
-            # Perícias aprimoradas
-            self.sheet["skills"]["common"]["Observation"] = {"full": 70, "half": 35}
-            self.sheet["skills"]["common"]["Read Person"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["common"]["Social"] = {"full": 60, "half": 30}
-            self.sheet["skills"]["expert"]["Medicine"] = {"full": 70, "half": 35}
-            self.sheet["skills"]["expert"]["Magic"] = {"full": 60, "half": 30}
-        
-        else:
-            # Ocupação genérica - valores padrão
-            self.sheet["characteristics"]["STR"] = {"full": 55, "half": 27}
-            self.sheet["characteristics"]["CON"] = {"full": 55, "half": 27}
-            self.sheet["characteristics"]["DEX"] = {"full": 55, "half": 27}
-            self.sheet["characteristics"]["INT"] = {"full": 55, "half": 27}
-            self.sheet["characteristics"]["POW"] = {"full": 55, "half": 27}
-            
-            # Magic points baseado no POW padrão
-            self.sheet["resources"]["magic_pts"]["starting"] = 55
-            self.sheet["resources"]["magic_pts"]["current"] = 55
-        
-        print(f"Character {name} ({occupation}) initialized successfully.")
+        print(f"Character {name} (Occupation: {occupation or 'None'}) initialized.")
         print(f"Luck: {self.sheet['resources']['luck']['current']}")
         print(f"Magic Points: {self.sheet['resources']['magic_pts']['current']}")
         return True
@@ -1324,44 +1303,42 @@ class Character:
     
     def apply_effects(self, effects: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Aplica uma lista de efeitos ao personagem.
-        
-        Args:
-            effects: Lista de efeitos a serem aplicados
-            
-        Returns:
-            Dicionário com resultado da aplicação dos efeitos
+        Processa uma lista de efeitos, modificando o estado do personagem.
         """
-        if not isinstance(effects, list):
-            return {
-                "success": False,
-                "error": f"'effects' deve ser uma lista, recebido: {type(effects)}",
-                "effects_applied": 0
-            }
-        
-        results = []
-        success_count = 0
-        error_count = 0
-        
-        for i, effect in enumerate(effects):
-            result = self.apply_effect(effect)
-            results.append({
-                "effect_index": i,
-                "effect": effect,
-                "result": result
-            })
-            
-            if result.get("success", False):
-                success_count += 1
-            else:
-                error_count += 1
+        applied_count = 0
+        failed_count = 0
+
+        for effect in effects:
+            action = effect.get("action")
+            try:
+                if action == "set-occupation":
+                    self.set_occupation(effect["value"])
+                    applied_count += 1
+                elif action == "take_damage":
+                    self.take_damage(effect["amount"])
+                    applied_count += 1
+                elif action == "heal_damage":
+                    self.heal_damage(effect["amount"])
+                    applied_count += 1
+                elif action == "spend_magic":
+                    self.spend_magic(effect["amount"])
+                    applied_count += 1
+                elif action == "spend_luck":
+                    self.spend_luck(effect["amount"])
+                    applied_count += 1
+                elif action == "gain_skill":
+                    self.set_skill(effect["skill"], 50, "expert") # Default value
+                    applied_count += 1
+                else:
+                    failed_count += 1
+            except (KeyError, TypeError) as e:
+                print(f"Failed to apply effect {effect}: {e}")
+                failed_count += 1
         
         return {
-            "success": error_count == 0,
-            "effects_processed": len(effects),
-            "effects_applied": success_count,
-            "effects_failed": error_count,
-            "results": results
+            "success": failed_count == 0,
+            "effects_applied": applied_count,
+            "effects_failed": failed_count
         }
     
     def validate_effect(self, effect: Dict[str, Any]) -> Dict[str, Any]:

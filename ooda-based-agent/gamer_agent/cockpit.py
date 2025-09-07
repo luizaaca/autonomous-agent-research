@@ -101,21 +101,13 @@ INSTRUCTIONS:
 """
         return header.strip()
     
-    def render_character_status(self) -> str:
+    def render_character_status(self) -> Dict[str, Any]:
         """
-        Renderiza o status atual do personagem de forma visual.
+        Retorna o status atual do personagem como objeto estruturado.
         
         Returns:
-            String formatada com toda a ficha do personagem
+            Dicionário com todas as informações do personagem organizadas por categoria
         """
-        # Informações básicas usando métodos da Character
-        info_section = f"""
-📋 CHARACTER INFO
-├─ Name: {self.character.name}
-├─ Occupation: {self.character.occupation}
-└─ Age: {self.character.age}
-"""
-        
         # Status de saúde usando o novo sistema
         health_status = self.character.get_health_status()
         current_health = health_status["current_level"]
@@ -129,41 +121,38 @@ INSTRUCTIONS:
             "Impaired": "💜"
         }
         
-        health_section = f"""
-❤️  HEALTH STATUS
-└─ {health_icons.get(current_health, '❓')} {current_health} (Damage: {damage_taken})
-"""
-        
         # Recursos usando métodos da Character
         luck_data = self.character.get_luck()
         magic_data = self.character.get_magic_points()
-        resources_section = f"""
-⚡ RESOURCES
-├─ Luck: {luck_data['current']}/{luck_data['starting']}
-├─ Magic Points: {magic_data['current']}/{magic_data['starting']}
-└─ Movement: 8
-"""
         
         # Características principais usando métodos da Character
-        char_section = "📊 CHARACTERISTICS\n"
-        characteristics = ["STR", "CON", "DEX", "INT", "POW"]
-        for char_name in characteristics:
+        characteristics = {}
+        char_names = ["STR", "CON", "DEX", "INT", "POW"]
+        for char_name in char_names:
             try:
                 char_data = self.character.get_characteristic(char_name)
-                char_section += f"├─ {char_name}: {char_data['full']} (Half: {char_data['half']})\n"
+                characteristics[char_name] = {
+                    "full": char_data['full'],
+                    "half": char_data['half']
+                }
             except KeyError:
                 continue
-        char_section = char_section.rstrip('\n')
         
-        # Habilidades principais usando métodos da Character
-        skills_section = "🎯 KEY SKILLS\n"
+        # Habilidades organizadas por categoria
+        skills = {
+            "common": {},
+            "combat": {}
+        }
         
-        # Habilidades comuns (primeiras 6)
+        # Habilidades comuns
         common_skill_names = ["Athletics", "Drive", "Navigate", "Observation", "Read Person", "Research"]
         for skill_name in common_skill_names:
             try:
                 skill_data = self.character.get_skill(skill_name, "common")
-                skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
+                skills["common"][skill_name] = {
+                    "full": skill_data['full'],
+                    "half": skill_data['half']
+                }
             except KeyError:
                 continue
         
@@ -172,33 +161,50 @@ INSTRUCTIONS:
         for skill_name in combat_skill_names:
             try:
                 skill_data = self.character.get_skill(skill_name, "combat")
-                skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
+                skills["combat"][skill_name] = {
+                    "full": skill_data['full'],
+                    "half": skill_data['half']
+                }
             except KeyError:
                 continue
-            
-        skills_section = skills_section.rstrip('\n')
         
         # Inventário usando métodos da Character
         inventory = self.character.get_inventory()
-        inventory_section = "🎒 INVENTORY\n"
-        if inventory['equipment']:
-            inventory_section += "├─ Equipment: " + ", ".join(inventory['equipment']) + "\n"
-        if inventory['weapons']:
-            inventory_section += "├─ Weapons: " + ", ".join(inventory['weapons']) + "\n"
-        if not inventory['equipment'] and not inventory['weapons']:
-            inventory_section += "└─ Empty\n"
-        inventory_section = inventory_section.rstrip('\n')
         
         # Modificadores ativos usando métodos da Character
-        modifiers_section = ""
         modifiers = self.character.get_modifiers()
-        if modifiers:
-            modifiers_section = "⚠️  ACTIVE MODIFIERS\n"
-            for mod in modifiers:
-                modifiers_section += f"├─ {mod.get('skill', 'General')}: {mod.get('type', 'Unknown')} ({mod.get('duration', 'Unknown')})\n"
-            modifiers_section = modifiers_section.rstrip('\n')
         
-        return f"{info_section}{health_section}{resources_section}{char_section}\n{skills_section}\n{inventory_section}\n{modifiers_section}".strip()
+        # Retornar objeto estruturado
+        return {
+            "character_info": {
+                "name": self.character.name,
+                "occupation": self.character.occupation,
+                "age": self.character.age
+            },
+            "health_status": {
+                "current_level": current_health,
+                "damage_taken": damage_taken,
+                "icon": health_icons.get(current_health, '❓')
+            },
+            "resources": {
+                "luck": {
+                    "current": luck_data['current'],
+                    "starting": luck_data['starting']
+                },
+                "magic": {
+                    "current": magic_data['current'],
+                    "starting": magic_data['starting']
+                },
+                "movement": 8
+            },
+            "characteristics": characteristics,
+            "skills": skills,
+            "inventory": {
+                "equipment": inventory.get('equipment', []),
+                "weapons": inventory.get('weapons', [])
+            },
+            "modifiers": modifiers if modifiers else []
+        }
     
     def render_current_situation(self) -> str:
         """
@@ -324,6 +330,84 @@ INSTRUCTIONS:
         }
         
         return json.dumps(history_json, indent=2, ensure_ascii=False)
+    
+    def _format_character_status_for_prompt(self) -> str:
+        """
+        Formata o status do personagem como string para uso em prompts.
+        Mantém compatibilidade com generate_prompt().
+        
+        Returns:
+            String formatada com o status do personagem
+        """
+        status_data = self.render_character_status()
+        
+        # Informações básicas
+        char_info = status_data["character_info"]
+        info_section = f"""
+📋 CHARACTER INFO
+├─ Name: {char_info["name"]}
+├─ Occupation: {char_info["occupation"]}
+└─ Age: {char_info["age"]}
+"""
+        
+        # Status de saúde
+        health = status_data["health_status"]
+        health_section = f"""
+❤️  HEALTH STATUS
+└─ {health["icon"]} {health["current_level"]} (Damage: {health["damage_taken"]})
+"""
+        
+        # Recursos
+        resources = status_data["resources"]
+        resources_section = f"""
+⚡ RESOURCES
+├─ Luck: {resources["luck"]["current"]}/{resources["luck"]["starting"]}
+├─ Magic Points: {resources["magic"]["current"]}/{resources["magic"]["starting"]}
+└─ Movement: {resources["movement"]}
+"""
+        
+        # Características
+        characteristics = status_data["characteristics"]
+        char_section = "📊 CHARACTERISTICS\n"
+        for char_name, char_data in characteristics.items():
+            char_section += f"├─ {char_name}: {char_data['full']} (Half: {char_data['half']})\n"
+        char_section = char_section.rstrip('\n')
+        
+        # Habilidades
+        skills = status_data["skills"]
+        skills_section = "🎯 KEY SKILLS\n"
+        
+        # Habilidades comuns
+        for skill_name, skill_data in skills["common"].items():
+            skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
+        
+        # Habilidades de combate
+        for skill_name, skill_data in skills["combat"].items():
+            skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
+        
+        skills_section = skills_section.rstrip('\n')
+        
+        # Inventário
+        inventory = status_data["inventory"]
+        inventory_section = "🎒 INVENTORY\n"
+        if inventory['equipment']:
+            inventory_section += "├─ Equipment: " + ", ".join(inventory['equipment']) + "\n"
+        if inventory['weapons']:
+            inventory_section += "├─ Weapons: " + ", ".join(inventory['weapons']) + "\n"
+        if not inventory['equipment'] and not inventory['weapons']:
+            inventory_section += "└─ Empty\n"
+        inventory_section = inventory_section.rstrip('\n')
+        
+        # Modificadores
+        modifiers = status_data["modifiers"]
+        modifiers_section = ""
+        if modifiers:
+            modifiers_section = "⚠️  ACTIVE MODIFIERS\n"
+            for mod in modifiers:
+                modifiers_section += f"├─ {mod.get('skill', 'General')}: {mod.get('type', 'Unknown')} ({mod.get('duration', 'Unknown')})\n"
+            modifiers_section = modifiers_section.rstrip('\n')
+        
+        return f"{info_section}{health_section}{resources_section}{char_section}\n{skills_section}\n{inventory_section}\n{modifiers_section}".strip()
 
     def add_to_history(self, page_number: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None):
         """
@@ -360,7 +444,7 @@ INSTRUCTIONS:
         sections = [
             self.render_header(),
             "",
-            self.render_character_status(),
+            self._format_character_status_for_prompt(),
             "",
             self.render_current_situation(),
             "",

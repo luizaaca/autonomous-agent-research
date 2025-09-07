@@ -1,60 +1,108 @@
-from agent import Agent
+#!/usr/bin/env python3
+"""
+Autonomous Gaming Agent - The Domestic
+Entry point for the gaming agent with PlayerInputAdapter architecture v1.2
+
+Usage:
+    python main.py --player demo   (modo demonstração automática)
+    python main.py --player human  (modo console interativo)
+    python main.py --player llm    (modo IA via API)
+"""
+
+import argparse
+import os
+import sys
+from character import Character
 from game_repository import GameRepository
-from default_decision_controller import DefaultDecisionController, RandomDecisionController
+from agent import Agent
+from player_adapters import DemoPlayerAdapter, HumanPlayerAdapter, LLMPlayerAdapter
 
 
-def run_scenario(name: str, occupation: str, controller_type: str = "random"):
+def main():
     """
-    Executa um cenário de teste com configurações específicas.
-    
-    Args:
-        name: Nome do personagem
-        occupation: Ocupação do personagem
-        controller_type: Tipo de controller ("default" ou "random")
+    Ponto de entrada principal do agente de jogo.
+    Configura e inicia o agente com o PlayerInputAdapter apropriado.
     """
-    print(f"--- Running Scenario: {name} ({occupation}) with {controller_type.title()}Controller ---")
-    
-    # Criar repositório de dados do jogo
-    game_repository = GameRepository()
-    
-    # Selecionar controller baseado no tipo
-    if controller_type == "random":
-        decision_controller = RandomDecisionController()
-    else:
-        decision_controller = DefaultDecisionController(debug=True)
-    
-    # Criar e executar agente
-    agent = Agent(
-        name=name,
-        occupation=occupation,
-        game_instructions=None,  # Não precisamos mais - Character tem get_game_backstory()
-        game_data=game_repository,
-        decision_controller=decision_controller
+    # Configuração argparse para seleção do tipo de jogador
+    parser = argparse.ArgumentParser(
+        description="Autonomous Gaming Agent - The Domestic",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Tipos de jogador disponíveis:
+  demo    - Modo demonstração automática (DefaultDecisionController interno)
+  human   - Modo console interativo (input manual via terminal)
+  llm     - Modo IA via API (requer GEMINI_API_KEY)
+
+Exemplos:
+  python main.py --player demo
+  python main.py --player human
+  python main.py --player llm
+        """
     )
     
+    parser.add_argument(
+        '--player', 
+        choices=['demo', 'human', 'llm'], 
+        default='demo',
+        help='Tipo de interface do jogador (padrão: demo)'
+    )
+    
+    args = parser.parse_args()
+    
     try:
+        # Character sem ocupação inicial - definida dinamicamente via "set-occupation" effect
+        print("[INFO] Criando personagem sem ocupação inicial...")
+        character = Character(name="Agent", occupation=None)
+        
+        # Game Repository com cache das 112 páginas
+        print("[INFO] Carregando repositório do jogo...")
+        game_repo = GameRepository()
+        
+        # Seleção e configuração do PlayerInputAdapter baseado no argumento
+        print(f"[INFO] Configurando {args.player} player adapter...")
+        
+        if args.player == 'human':
+            player_adapter = HumanPlayerAdapter()
+            print("[INFO] Modo humano: Use o console para interagir")
+            
+        elif args.player == 'llm':
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                print("[ERROR] GEMINI_API_KEY não encontrada nas variáveis de ambiente")
+                print("        Configure a chave da API antes de usar o modo LLM:")
+                print("        export GEMINI_API_KEY='sua_chave_aqui'")
+                sys.exit(1)
+            
+            player_adapter = LLMPlayerAdapter(api_key=api_key)
+            print("[INFO] Modo LLM: IA tomará decisões via API")
+            
+        else:  # default: demo
+            player_adapter = DemoPlayerAdapter()
+            print("[INFO] Modo demo: Execução automática para demonstração")
+        
+        # Instanciar Agent com dependency injection (arquitetura v1.2)
+        print("[INFO] Inicializando Agent com nova arquitetura PlayerInputAdapter...")
+        agent = Agent(
+            character=character,
+            game_repository=game_repo,
+            player_input_adapter=player_adapter
+        )
+        
+        # Iniciar o game loop (ciclo OODA)
+        print("[INFO] Iniciando jogo...")
+        print("=" * 60)
         agent.run()
-        print(f"--- Scenario {name} Finished Successfully ---\n")
+        
+    except KeyboardInterrupt:
+        print("\n\n[INFO] Jogo interrompido pelo usuário")
+        sys.exit(0)
+        
     except Exception as e:
-        print(f"--- Scenario {name} Failed: {e} ---\n")
+        print(f"\n[ERROR] Erro durante execução: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    print("=== TESTE AUTOMÁTICO COM ARQUITETURA REFATORADA ===\n")
-    print("Usando Character.get_game_backstory() + GameRepository + RandomDecisionController\n")
-    
-    # Cenários de teste com RandomDecisionController
-    scenarios = [
-        ("Alex", "Police Officer"),
-        ("Brenda", "Social Worker"), 
-        ("Charles", "Nurse")
-    ]
-    
-    for name, occupation in scenarios:
-        run_scenario(name, occupation, "random")
-    
-    print("=== TESTE AUTOMÁTICO CONCLUÍDO ===")
-    
-    # Opcional: rodar um cenário com DefaultController para comparação
-    print("\n=== COMPARAÇÃO COM DEFAULT CONTROLLER ===")
-    run_scenario("Detective", "Police Officer", "default")
+    main()

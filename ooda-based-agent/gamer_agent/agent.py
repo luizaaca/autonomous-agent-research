@@ -1,29 +1,32 @@
 from character import Character
 from cockpit import GamePage
-from decision_controller import DecisionController, DecisionContext
-from default_decision_controller import DefaultDecisionController
+from player_input_adapter import PlayerInputAdapter
+from typing import Dict, Any
 
 class Agent:
-    def __init__(self, name, occupation, game_instructions, game_data, decision_controller: DecisionController = None):
-        # Refatorado para usar Character com backstory inteligente
-        # game_instructions agora é opcional - Character tem get_game_backstory()
-        if game_instructions and hasattr(game_instructions, 'get_backstory'):
-            # Compatibilidade com código legado
-            backstory = game_instructions.get_backstory()
-        else:
-            # Nova arquitetura - Character gerencia seu próprio backstory
-            backstory = ""  # Será substituído por get_game_backstory()
+    def __init__(self, character: Character, game_repository: Dict[int, Dict], player_input_adapter: PlayerInputAdapter):
+        """
+        Inicializa o Agent com arquitetura PlayerInputAdapter v1.2.
         
-        self.character = Character(name, occupation, 30, backstory)
-        self.game_data = game_data
+        Args:
+            character: Instância da classe Character (pode ter occupation=None inicialmente)
+            game_repository: Dicionário com todas as páginas do jogo
+            player_input_adapter: Adapter para captura de entrada do jogador
+        """
+        self.character = character
+        self.game_data = game_repository
         self.current_page = 1
         self.combat_status = {}
         
-        # Injeção de dependência para controlador de decisão
-        self.decision_controller = decision_controller or DefaultDecisionController()
+        # Nova arquitetura v1.2: PlayerInputAdapter
+        self.player_input_adapter = player_input_adapter
+        
+        # Circuit Breaker Pattern - Previne loops infinitos
+        self.failed_choices_count = 0
+        self.max_choice_retries = 3
         
         # Criar instância da GamePage para visualização rica
-        self.game_page = GamePage(self.character, game_data)
+        self.game_page = GamePage(self.character, game_repository)
 
     @property
     def sheet(self):
@@ -75,31 +78,215 @@ class Agent:
         
         return True
 
-    def _llm_decide(self, choices):
+    def _decide(self, choices):
         """
-        Decide qual ação tomar com base nas opções e no estado do agente.
-        Refatorado para usar injeção de dependência com DecisionController.
+        Decide qual ação tomar usando PlayerInputAdapter (Arquitetura v1.2).
+        Implementa Circuit Breaker Pattern e validação de regras conforme seção 5.4.
+        
+        Args:
+            choices: Lista de choices disponíveis na página atual
+            
+        Returns:
+            choice dict selecionado e validado, ou None se circuit breaker ativado
         """
+        # CIRCUIT BREAKER: Verificar se já excedeu máximo de falhas
+        if self.failed_choices_count >= self.max_choice_retries:
+            error_msg = f"[CIRCUIT BREAKER] Máximo de tentativas ({self.max_choice_retries}) excedido para escolhas falhadas consecutivas. Encerrando execução para evitar loop infinito."
+            print(f"🚨 {error_msg}")
+            
+            # Adicionar ao histórico
+            if hasattr(self.character, 'add_to_history'):
+                self.character.add_to_history(
+                    page_number=self.current_page,
+                    page_text="[SYSTEM CIRCUIT BREAKER]",
+                    choice_made={"system_error": error_msg},
+                    choice_index=0
+                )
+            
+            print("🛑 Execução interrompida para preservar estabilidade do sistema")
+            return None  # Sinaliza para o run() encerrar
+        
         # VALIDAÇÃO CRÍTICA: Verificar se choices está em formato válido
         if not self._validate_choices(choices):
             print("ERRO CRÍTICO: Lista de choices inválida. Usando ação de fallback.")
             raise Exception("Invalid choices format")
         
-        # Criar contexto para o controller
-        context = DecisionContext(self.character, self.game_data, self.current_page)
+        # Loop de retry para validação de regras (máximo 3 tentativas)
+        max_attempts = 3
+        attempt = 0
         
-        # Delegar decisão para o controller injetado
-        chosen_choice = self.decision_controller.decide(choices, context)
+        while attempt < max_attempts:
+            attempt += 1
+            
+            # Obter dados estruturados do cockpit
+            character_data = self.game_page.render_character_status()
+            
+            # Usar PlayerInputAdapter para obter choice_index (base 1)
+            choice_index = self.player_input_adapter.get_decision(choices, character_data)
+            
+            # Conversão para base 0 e obtenção do choice dict
+            chosen_choice = choices[choice_index - 1]
+            
+            # VALIDAÇÃO DE REGRAS: Verificar se choice é válido para estado atual
+            validation_result = self._validate_choice_against_rules(chosen_choice)
+            
+            if validation_result["valid"]:
+                # SUCCESS: Reset circuit breaker counter
+                self.failed_choices_count = 0
+                
+                # Exibir escolha formatada
+                print("🎯 ESCOLHA SELECIONADA E VALIDADA:")
+                print("=" * 50)
+                for key, value in chosen_choice.items():
+                    print(f"  {key}: {value}")
+                print("=" * 50)
+                
+                # RESOLUÇÃO DE CONDITIONAL_ON: Se choice tem conditional_on, resolvê-lo
+                if 'conditional_on' in chosen_choice:
+                    resolved_choice = self._resolve_conditional_choice(chosen_choice)
+                    print(f"🎯 CHOICE RESOLVIDO PARA OCUPAÇÃO:")
+                    print("=" * 50)
+                    for key, value in resolved_choice.items():
+                        print(f"  {key}: {value}")
+                    print("=" * 50)
+                    return resolved_choice
+                
+                return chosen_choice
+            else:
+                # FAILURE: Increment circuit breaker counter
+                self.failed_choices_count += 1
+                
+                # Choice inválido - adicionar feedback de erro ao histórico
+                error_message = f"[SYSTEM ERROR] {validation_result['error_message']} (Falha {self.failed_choices_count}/{self.max_choice_retries})"
+                print(f"❌ {error_message}")
+                
+                # Adicionar erro ao histórico do character para contexto futuro
+                if hasattr(self.character, 'add_to_history'):
+                    # Usar método moderno se disponível
+                    self.character.add_to_history(
+                        page_number=self.current_page,
+                        page_text="[SYSTEM]",
+                        choice_made={"error": error_message},
+                        choice_index=choice_index
+                    )
+                
+                # Verificar se atingiu limite do circuit breaker
+                if self.failed_choices_count >= self.max_choice_retries:
+                    print("🚨 Circuit Breaker será ativado na próxima tentativa")
+                    print("🛑 Forçando fallback para evitar loop infinito...")
+                    
+                    # Fallback de emergência: retornar primeira choice básica
+                    for choice in choices:
+                        if self._is_basic_choice(choice):
+                            print(f"🔄 Usando fallback choice: {choice.get('text', 'N/A')}")
+                            return choice
+                    
+                    # Se nenhuma choice básica, retornar primeira disponível
+                    print(f"🔄 Usando primeira choice disponível: {choices[0].get('text', 'N/A')}")
+                    return choices[0]
+                
+                if attempt >= max_attempts:
+                    print("⚠️  Máximo de tentativas excedido no loop atual.")
+                    # Continue para próxima tentativa, circuit breaker decide se para
+                    break
+                
+                print(f"🔄 Solicitando nova escolha... (Tentativa {attempt + 1}/{max_attempts})")
         
-        # Exibir escolha formatada
-        if chosen_choice:
-            print("🎯 ESCOLHA DO MODELO (ESTRUTURADA):")
-            print("=" * 50)
-            for key, value in chosen_choice.items():
-                print(f"  {key}: {value}")
-            print("=" * 50)
+        # Nunca deveria chegar aqui, mas safety fallback
+        return choices[0]
+    
+    def _resolve_conditional_choice(self, choice: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Resolve uma choice conditional_on para o path específico da ocupação atual.
         
-        return chosen_choice
+        Args:
+            choice: Choice com conditional_on a ser resolvido
+            
+        Returns:
+            Choice resolvido para a ocupação atual
+        """
+        if choice.get('conditional_on') != 'occupation':
+            # Se não é conditional_on occupation, retornar como está
+            return choice
+        
+        current_occupation = self.character.occupation
+        paths = choice.get('paths', {})
+        
+        # Determinar qual path usar
+        if current_occupation in paths:
+            resolved_choice = paths[current_occupation].copy()
+            print(f"🎯 Usando path para ocupação '{current_occupation}'")
+        elif 'default' in paths:
+            resolved_choice = paths['default'].copy()
+            print(f"🎯 Usando path 'default' (ocupação atual: {current_occupation or 'None'})")
+        else:
+            # Não deveria acontecer se validação passou, mas fallback de segurança
+            print(f"⚠️  ERRO: Nenhum path encontrado para ocupação '{current_occupation}' e sem default")
+            return choice
+        
+        # Preservar texto original se não houver no path resolvido
+        if 'text' not in resolved_choice and 'text' in choice:
+            resolved_choice['text'] = choice['text']
+            
+        return resolved_choice
+    
+    def _validate_choice_against_rules(self, choice: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Valida se uma choice é permitida pelas regras do jogo (v1.2).
+        
+        Args:
+            choice: Choice a ser validado
+            
+        Returns:
+            Dict com 'valid' (bool) e 'error_message' (str) se inválido
+        """
+        # Validação de conditional_on (ocupação)
+        if 'conditional_on' in choice:
+            if choice['conditional_on'] == 'occupation':
+                current_occupation = self.character.occupation
+                
+                # Verificar se tem paths definidos
+                paths = choice.get('paths', {})
+                
+                # Se ocupação atual não está nos paths e não há default
+                if current_occupation not in paths and 'default' not in paths:
+                    return {
+                        "valid": False,
+                        "error_message": f"Choice requer ocupação específica. Ocupação atual: {current_occupation or 'None'}"
+                    }
+                
+                # Se ocupação atual não está nos paths mas há default, permitir
+                # Se ocupação atual está nos paths, permitir
+                
+        # Validação de requires (pré-requisitos adicionais)
+        if 'requires' in choice:
+            for requirement in choice['requires']:
+                # Implementar validação de requisitos específicos conforme necessário
+                # Ex: knuckles_restrained, specific items, etc.
+                pass
+        
+        # Choice é válido
+        return {"valid": True, "error_message": ""}
+    
+    def _is_basic_choice(self, choice: Dict[str, Any]) -> bool:
+        """
+        Verifica se uma choice é básica (não requer validação especial).
+        
+        Args:
+            choice: Choice a ser verificada
+            
+        Returns:
+            True se for uma choice básica
+        """
+        # Choice básica: tem 'goto' e não tem condicionais complexas
+        if 'goto' in choice and 'conditional_on' not in choice:
+            return True
+        
+        # Choice com roll também é considerada básica
+        if any(key in choice for key in ['roll', 'luck_roll', 'opposed_roll']):
+            return True
+            
+        return False
     #Não tem fallback deve ser reenviada para o agente decisorio novamente com historico atualizado
     def _create_fallback_choice(self):
         """Cria uma choice de segurança para situações de erro."""
@@ -107,15 +294,23 @@ class Agent:
 
     def _process_effects(self, effects):
         """
-        Processa uma lista de efeitos no estado do agente.
-        Refatorado para usar character.apply_effects() ao invés de lógica manual.
+        Processa uma lista de efeitos no estado do agente (v1.2).
+        Refatorado para usar character.apply_effects() com tratamento de ocupação dinâmica.
         """
         if not isinstance(effects, list):
             print(f"AVISO: 'effects' deve ser uma lista, recebido: {type(effects)}. Ignorando efeitos.")
             return
+
+        occupation_before = self.character.occupation
         
         # Usar o método robusto da classe Character
         result = self.character.apply_effects(effects)
+        
+        # Verificar se ocupação foi definida/alterada
+        occupation_after = self.character.occupation
+        if occupation_before != occupation_after:
+            print(f"🎯 OCUPAÇÃO DEFINIDA: {occupation_before or 'None'} → {occupation_after}")
+            print(f"📋 Personagem agora tem acesso a habilidades e choices específicas de {occupation_after}")
         
         # Log dos resultados para compatibilidade com comportamento anterior
         if result['success']:
@@ -245,20 +440,12 @@ class Agent:
     def perform_action(self, choice):
         """
         Executa a ação decidida, aplicando efeitos e rolagens de dados.
-        Inclui validações para prevenir problemas com respostas incorretas do LLM.
+        Choice já foi validado em _decide(), então procede diretamente com execução.
         """
         # VALIDAÇÃO CRÍTICA: Verificar se choice está em formato válido
         if not self._validate_choice(choice):
-            print("ERRO CRÍTICO: Choice inválida recebida do LLM")
+            print("ERRO CRÍTICO: Choice inválida recebida")
             raise ValueError(f"Choice inválida: {choice}")
-        
-        # VALIDAÇÃO DE CONDIÇÕES: Verificar se o LLM seguiu o path correto para sua ocupação
-        page_data = self.game_data.get(self.current_page, {})
-        available_choices = page_data.get("choices", [])
-        
-        if not self.verify_conditions(choice, available_choices):
-            print("ERRO: LLM violou condições de ocupação")
-            raise ValueError(f"Violação de condições de ocupação: {choice}")
         
         outcome = choice.get("outcome", "")
         
@@ -539,13 +726,33 @@ class Agent:
             # 2. Orient
             self._orient(page_text)
             
-            # 3. Decide
-            chosen_action = self._llm_decide(choices)
+            # 3. Decide (usando PlayerInputAdapter v1.2)
+            chosen_action = self._decide(choices)
+            
+            # CIRCUIT BREAKER CHECK: Se _decide retornar None, encerrar execução
+            if chosen_action is None:
+                print("🚨 CIRCUIT BREAKER ATIVADO - Encerrando execução do agente")
+                print("📊 Estatísticas da sessão:")
+                print(f"   - Página atual: {self.current_page}")
+                print(f"   - Falhas consecutivas: {self.failed_choices_count}")
+                print(f"   - Limite máximo: {self.max_choice_retries}")
+                break
+            
             print(f"Agente escolheu: {chosen_action}")
             
             # 4. Act
-            outcome = self.perform_action(chosen_action)
-            print(f"Resultado: {outcome}\n---")
+            try:
+                outcome = self.perform_action(chosen_action)
+                print(f"Resultado: {outcome}\n---")
+                # Se a ação foi bem-sucedida, reseta o contador de falhas.
+                self.failed_choices_count = 0
+            except Exception as e:
+                print(f"🚨 ERRO DE EXECUÇÃO: A ação falhou. {e}")
+                self.failed_choices_count += 1
+                outcome = f"Erro de Execução: {e}"
+                if self.failed_choices_count >= self.max_choice_retries:
+                    print("🚨 CIRCUIT BREAKER ATIVADO DEVIDO A ERRO DE EXECUÇÃO - Encerrando.")
+                    break
             
             # 5. Record - Registrar escolha no histórico detalhado
             choice_index = None
@@ -601,7 +808,7 @@ class Agent:
         print("\n" + "=" * 80)
         print("📍 PROGRESSO DA NAVEGAÇÃO:")
         print(f"  Página atual: {self.current_page}")
-        print(f"  Total de páginas visitadas: {len([entry for entry in self.sheet['page_history'] if isinstance(entry, tuple)])}")
+        print(f"  Total de páginas visitadas: {len(self.sheet['page_history'])}")
         print("=" * 80 + "\n")
         # Futuramente, poderia usar um LLM para extrair contexto do page_text
         pass
