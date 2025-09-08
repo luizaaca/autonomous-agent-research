@@ -1601,6 +1601,27 @@ class Character:
     def clear_history(self):
         """Limpa o histórico de decisões."""
         self._sheet['page_history'] = []
+    
+    def get_all_skills(self) -> Dict[str, Dict[str, int]]:
+        """
+        Retorna todas as habilidades do personagem, independentemente do tipo.
+        
+        As habilidades são coletadas dos dicionários 'common', 'combat' e 'expert'
+        e retornadas em um único dicionário onde a chave é o nome da habilidade
+        e o valor é um dicionário com 'full' e 'half'.
+        
+        Returns:
+            Dicionário com todas as habilidades do personagem
+        """
+        all_skills = {}
+        
+        # Iterar sobre todos os tipos de habilidades
+        for skill_type in ["common", "combat", "expert"]:
+            if skill_type in self._sheet["skills"]:
+                # Copiar habilidades do tipo atual para o dicionário geral
+                all_skills.update(self._sheet["skills"][skill_type].copy())
+        
+        return all_skills
 
 
 # Função de compatibilidade com código existente

@@ -42,6 +42,7 @@ class Cockpit:
         self.current_page_number = None
         self.current_page_data = None
         self.console = Console()
+        self._cached_status_data = None
         
     def set_current_page(self, page_number: int):
         """Define a página atual do jogo."""
@@ -53,6 +54,15 @@ class Cockpit:
         else:
             # Fallback para dicionários diretos
             self.current_page_data = self.pages_data.get(page_number, {})
+    
+    def force_refresh(self):
+        """
+        Força a atualização dos dados do personagem na próxima renderização.
+        Este método deve ser chamado sempre que o estado do personagem for alterado
+        externamente (ex: após aplicar efeitos como 'set-occupation').
+        """
+        # Invalidar os dados de status para forçar a coleta na próxima renderização
+        self._cached_status_data = None
     
     def render_game_screen(self) -> None:
         """
@@ -70,7 +80,15 @@ class Cockpit:
         # 3. Construir painéis de status
         info_panel = self._build_info_table(status_data)
         resources_panel = self._build_resources_table(status_data)
-        status_layout = Columns([info_panel, resources_panel], equal=True)
+        attributes_panel = self._build_attributes_table(status_data)
+        skills_panel = self._build_skills_table(status_data)
+        
+        status_layout = Columns([
+            info_panel,
+            resources_panel,
+            attributes_panel,
+            skills_panel
+        ], equal=True)
 
         # 4. Construir painel de histórico
         history_panel = self._build_history_panel()
@@ -112,7 +130,12 @@ class Cockpit:
     def _get_character_status_data(self) -> Dict[str, Any]:
         """
         Coleta e estrutura os dados do personagem para renderização.
+        Utiliza um cache para evitar recálculos desnecessários, a menos que force_refresh seja chamado.
         """
+        # Se os dados já estiverem em cache, retorná-los
+        if self._cached_status_data is not None:
+            return self._cached_status_data
+            
         # Status de saúde
         health_status = self.character.get_health_status()
         current_health = health_status["current_level"]
@@ -127,7 +150,28 @@ class Cockpit:
         luck_data = self.character.get_luck()
         magic_data = self.character.get_magic_points()
         
-        return {
+        # Características
+        characteristics = {}
+        char_names = ["STR", "CON", "DEX", "INT", "POW"]
+        for char_name in char_names:
+            try:
+                char_data = self.character.get_characteristic(char_name)
+                characteristics[char_name] = char_data
+            except KeyError:
+                continue
+        
+        # Habilidades - NOTA: Idealmente, a classe Character deveria fornecer um método get_all_skills()
+        skills = {
+            "common": {},
+            "combat": {},
+            "expert": {}
+        }
+        all_character_skills = self.character.get_all_skills()
+        for category, skill_list in all_character_skills.items():
+            if category in skills:
+                skills[category] = skill_list
+
+        self._cached_status_data = {
             "info": {
                 "name": self.character.name,
                 "occupation": self.character.occupation or "N/A",
@@ -141,8 +185,12 @@ class Cockpit:
             "resources": {
                 "luck": f"{luck_data['current']}/{luck_data['starting']}",
                 "magic": f"{magic_data['current']}/{magic_data['starting']}",
-            }
+            },
+            "characteristics": characteristics,
+            "skills": skills
         }
+        
+        return self._cached_status_data
     
     def _build_info_table(self, status_data: Dict[str, Any]) -> Panel:
         """Cria a tabela de informações básicas e saúde."""
@@ -170,9 +218,45 @@ class Cockpit:
         
         table.add_row("SORTE:", resources["luck"])
         table.add_row("MAGIA:", resources["magic"])
-        table.add_row("MOVIMENTO:", "8")
         
         return Panel(table, title="⚡ RECURSOS", border_style="yellow")
+
+    def _build_attributes_table(self, status_data: Dict[str, Any]) -> Panel:
+        """Cria a tabela de atributos (características)."""
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold red", justify="left")
+        table.add_column(justify="left")
+        
+        characteristics = status_data.get("characteristics", {})
+        
+        if not characteristics:
+            table.add_row("N/A", "")
+        else:
+            for name, values in characteristics.items():
+                table.add_row(f"{name}:", str(values.get('full', '')))
+            
+        return Panel(table, title="📊 ATRIBUTOS", border_style="red")
+
+    def _build_skills_table(self, status_data: Dict[str, Any]) -> Panel:
+        """Cria a tabela de habilidades."""
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold blue", justify="left")
+        table.add_column(justify="left")
+        
+        skills = status_data.get("skills", {})
+        all_skills = {
+            **skills.get("common", {}),
+            **skills.get("combat", {}),
+            **skills.get("expert", {})
+        }
+        
+        if not all_skills:
+            table.add_row("Nenhuma", "")
+        else:
+            for name, values in sorted(all_skills.items()):
+                table.add_row(f"{name}:", f"{values.get('full', 0)}%")
+            
+        return Panel(table, title="🎯 HABILIDADES", border_style="blue")
 
     def _build_history_panel(self) -> Optional[Panel]:
         """
@@ -184,8 +268,8 @@ class Cockpit:
             return None
 
         content = Text()
-        # Mostrar últimas 3 jogadas
-        recent_history = history[-3:] if len(history) > 3 else history
+        # Mostrar últimas 5 jogadas
+        recent_history = history[-5:]
         
         for entry in recent_history:
             if isinstance(entry, dict):
@@ -199,9 +283,29 @@ class Cockpit:
                 else:
                     choice_text = f'"{choice_text}"'
 
-                result_info = ""
+                # Construir string de resultado detalhado
+                result_parts = []
+                if 'roll_result' in choice_made:
+                    success_str = "SUCESSO" if choice_made.get('success') else "FALHA"
+                    skill = choice_made.get('skill_used', 'N/A')
+                    roll = choice_made.get('roll_result', 'N/A')
+                    target = choice_made.get('target_value', 'N/A')
+                    result_parts.append(f"Rolagem de {skill}: {roll} vs {target} -> {success_str}")
+
+                if 'effects_applied' in choice_made and choice_made['effects_applied']:
+                    effects_str_parts = []
+                    for eff in choice_made['effects_applied']:
+                        action = eff.get('action', 'unknown')
+                        param = eff.get('amount') or eff.get('skill') or ''
+                        effects_str_parts.append(f"{action}({param})")
+                    result_parts.append(f"Efeitos: {', '.join(effects_str_parts)}")
+
                 if 'goto_executed' in choice_made:
-                    result_info = f" (goto: {choice_made['goto_executed']})"
+                    result_parts.append(f"goto: {choice_made['goto_executed']}")
+                
+                result_info = ""
+                if result_parts:
+                    result_info = f" -> Resultado: {'; '.join(result_parts)}"
 
                 history_line = f"Página {page_num}: Escolheu {choice_text}{result_info}\n"
                 content.append(history_line, style="dim white")

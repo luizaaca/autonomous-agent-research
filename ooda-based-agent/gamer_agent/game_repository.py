@@ -7,7 +7,6 @@ acesso a dados da lógica de negócio.
 """
 
 from typing import Dict, Any, Optional
-import pages
 
 
 class GameRepository:
@@ -17,10 +16,14 @@ class GameRepository:
     Implementa padrão Repository para encapsular acesso aos dados das páginas,
     proporcionando cache, validação e interface limpa para o resto do sistema.
     """
-    
-    def __init__(self):
+
+    def __init__(self, lang='en'):
         """Inicializa o repositório com dados das páginas."""
-        self._pages_data = pages.PAGES
+        if lang == 'pt':
+            from pages_pt import PAGES
+        else:
+            from pages import PAGES
+        self._pages_data = PAGES
         self._cache = {}
         self._validate_data()
     

@@ -46,6 +46,13 @@ Exemplos:
         default='demo',
         help='Tipo de interface do jogador (padrão: demo)'
     )
+
+    parser.add_argument(
+        '--lang',
+        choices=['en', 'pt'],
+        default='en',
+        help='Idioma do jogo (padrão: en)'
+    )
     
     args = parser.parse_args()
     
@@ -56,7 +63,7 @@ Exemplos:
         
         # Game Repository com cache das 112 páginas
         print("[INFO] Carregando repositório do jogo...")
-        game_repo = GameRepository()
+        game_repo = GameRepository(lang=args.lang)
         
         # Seleção e configuração do PlayerInputAdapter baseado no argumento
         print(f"[INFO] Configurando {args.player} player adapter...")
