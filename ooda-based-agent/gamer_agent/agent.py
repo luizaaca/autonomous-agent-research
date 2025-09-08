@@ -1,5 +1,5 @@
 from character import Character
-from cockpit import GamePage
+from cockpit import Cockpit
 from player_input_adapter import PlayerInputAdapter
 from typing import Dict, Any
 
@@ -25,8 +25,8 @@ class Agent:
         self.failed_choices_count = 0
         self.max_choice_retries = 3
         
-        # Criar instância da GamePage para visualização rica
-        self.game_page = GamePage(self.character, game_repository)
+        # Criar instância do Cockpit para visualização rica
+        self.cockpit = Cockpit(self.character, game_repository)
 
     @property
     def sheet(self):
@@ -119,7 +119,7 @@ class Agent:
             attempt += 1
             
             # Obter dados estruturados do cockpit
-            character_data = self.game_page.render_character_status()
+            character_data = self.cockpit.render_character_status()
             
             # Usar PlayerInputAdapter para obter choice_index (base 1)
             choice_index = self.player_input_adapter.get_decision(choices, character_data)
@@ -743,9 +743,25 @@ class Agent:
             # 4. Act
             try:
                 outcome = self.perform_action(chosen_action)
-                print(f"Resultado: {outcome}\n---")
+                
                 # Se a ação foi bem-sucedida, reseta o contador de falhas.
                 self.failed_choices_count = 0
+                
+                # LOG DA JOGADA: Exibir dados estruturados em JSON
+                choice_index = None
+                for i, choice in enumerate(choices, 1):
+                    if choice == chosen_action:
+                        choice_index = i
+                        break
+                self._log_turn_summary(chosen_action, choice_index or 1, outcome)
+                
+                # PAUSA MANUAL: Aguardar ENTER para continuar (todos os modos)
+                try:
+                    input("Pressione ENTER para continuar...")
+                except KeyboardInterrupt:
+                    print("\n🛑 Jogo interrompido pelo usuário")
+                    break
+                
             except Exception as e:
                 print(f"🚨 ERRO DE EXECUÇÃO: A ação falhou. {e}")
                 self.failed_choices_count += 1
@@ -770,46 +786,28 @@ class Agent:
 
     def _observe(self):
         """
-        Observa o ambiente usando GamePage para visualização rica.
-        Exibe o cockpit completo enviado ao modelo e retorna choices estruturadas.
+        Observa o ambiente usando Cockpit para visualização rica.
+        Exibe a nova "tela de video-game" de forma limpa.
         """
-        # Configurar a página atual na GamePage
-        self.game_page.set_current_page(self.current_page)
+        # Configurar a página atual no Cockpit
+        self.cockpit.set_current_page(self.current_page)
         
-        # Gerar prompt rico usando GamePage
-        prompt = self.game_page.generate_prompt()
-        
-        # Exibir visualização rica
-        print("=" * 80)
-        print("📱 COCKPIT ENVIADO AO MODELO:")
-        print("=" * 80)
-        print(prompt)
-        print("=" * 80)
+        # Renderizar a tela de video-game (sem prints extras)
+        self.cockpit.render_game_screen()
         
         # Obter dados da página atual
         page_data = self.game_data.get(self.current_page, {})
         page_text = page_data.get("text", "Página não encontrada.")
         choices = page_data.get("choices", [])
         
-        # Exibir choices estruturadas
-        print("🎯 CHOICES DISPONÍVEIS (ESTRUTURADAS):")
-        for i, choice in enumerate(choices):
-            print(f"  [{i+1}] {choice}")
-        print("=" * 80)
-        
         return page_text, choices
 
     def _orient(self, page_text):
         """
         Orienta o agente, atualizando seu estado interno com base nas observações.
-        Integra com GamePage para histórico visual.
+        Processamento interno sem output visual.
         """
-        # Exibir progresso visual
-        print("\n" + "=" * 80)
-        print("📍 PROGRESSO DA NAVEGAÇÃO:")
-        print(f"  Página atual: {self.current_page}")
-        print(f"  Total de páginas visitadas: {len(self.sheet['page_history'])}")
-        print("=" * 80 + "\n")
+        # Processamento interno silencioso
         # Futuramente, poderia usar um LLM para extrair contexto do page_text
         pass
 
@@ -841,3 +839,32 @@ class Agent:
         print(f"  Escolha: {chosen_choice.get('text', str(chosen_choice)[:50])}")
         if outcome:
             print(f"  Resultado: {outcome[:100]}...")
+    
+    def _log_turn_summary(self, chosen_choice: Dict[str, Any], choice_index: int, outcome: str):
+        """
+        Registra um resumo limpo da jogada como JSON estruturado.
+        
+        Este método implementa o sistema de logging separado solicitado,
+        mostrando a escolha do jogador em formato JSON entre cada tela.
+        
+        Args:
+            chosen_choice: Choice executada
+            choice_index: Índice da choice selecionada (base 1)
+            outcome: Resultado da execução da choice
+        """
+        import json
+        
+        # Estruturar dados da jogada (foco no código da choice)
+        turn_data = {
+            "page": self.current_page,
+            "choice_selected": {
+                "index": choice_index,
+                "choice_data": chosen_choice  # Código completo da choice
+            },
+            "execution_result": outcome if outcome else "Executada com sucesso"
+        }
+        
+        # Exibir log estruturado de forma mais limpa
+        print("\n📋 LOG DA JOGADA:")
+        print(json.dumps(turn_data, indent=2, ensure_ascii=False))
+        print("")  # Linha em branco para separação

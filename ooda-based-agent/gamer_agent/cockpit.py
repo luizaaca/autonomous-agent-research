@@ -13,20 +13,25 @@ A estrutura é dividida em:
 from typing import Dict, List, Any, Optional
 import json
 from character import Character
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table, Column
+from rich.text import Text
+from rich.columns import Columns
 
 
-class GamePage:
+class Cockpit:
     """
-    Representa uma página/tela do jogo formatada como cockpit para o agente.
+    Representa a tela de jogo, renderizando todas as informações de forma unificada.
+    Usa a biblioteca rich para criar uma interface de "tela de video-game".
     
-    Esta classe encapsula toda a informação necessária para um LLM tomar decisões
-    no contexto do jogo, incluindo instruções, estado do personagem, situação atual
-    e histórico de ações.
+    Esta classe encapsula toda a informação necessária para exibir o estado do jogo
+    de forma compacta e organizada, separando a apresentação da lógica de decisão.
     """
     
     def __init__(self, character: Character, pages_data: Dict[int, Dict]):
         """
-        Inicializa a página do jogo.
+        Inicializa o Cockpit.
         
         Args:
             character: Instância da classe Character
@@ -36,6 +41,7 @@ class GamePage:
         self.pages_data = pages_data
         self.current_page_number = None
         self.current_page_data = None
+        self.console = Console()
         
     def set_current_page(self, page_number: int):
         """Define a página atual do jogo."""
@@ -48,6 +54,168 @@ class GamePage:
             # Fallback para dicionários diretos
             self.current_page_data = self.pages_data.get(page_number, {})
     
+    def render_game_screen(self) -> None:
+        """
+        Renderiza e exibe a tela de jogo completa como uma "tela de video-game".
+        
+        Este é o método principal que centraliza toda a UI do jogo, criando
+        uma apresentação compacta e organizada usando rich.
+        """
+        # 1. Obter dados do personagem
+        status_data = self._get_character_status_data()
+        
+        # 2. Construir tabelas de status
+        info_table = self._build_info_table(status_data)
+        resources_table = self._build_resources_table(status_data)
+        
+        # 3. Construir texto da página atual
+        page_text = self.current_page_data.get('text', 'Página não encontrada.')
+        page_panel = Panel(
+            Text(page_text, style="white"),
+            title="SITUAÇÃO ATUAL",
+            border_style="cyan"
+        )
+        
+        # 4. Construir lista de escolhas
+        choices = self.current_page_data.get('choices', [])
+        choices_panel = self._build_choices_panel(choices)
+        
+        # 5. Montar layout principal
+        status_layout = Columns([info_table, resources_table], equal=True)
+        
+        # Criar grid principal
+        main_grid = Table.grid(padding=(1, 0), expand=True)
+        main_grid.add_column()
+        main_grid.add_row(status_layout)
+        main_grid.add_row("")
+        main_grid.add_row(page_panel)
+        main_grid.add_row("")
+        main_grid.add_row(choices_panel)
+        
+        main_panel = Panel(
+            main_grid,
+            title=f"🎮 COCKPIT - PÁGINA {self.current_page_number}",
+            border_style="bold blue",
+            expand=False
+        )
+        
+        # 6. Renderizar na tela
+        self.console.clear()
+        self.console.print(main_panel)
+    
+    def _get_character_status_data(self) -> Dict[str, Any]:
+        """
+        Coleta e estrutura os dados do personagem para renderização.
+        """
+        # Status de saúde
+        health_status = self.character.get_health_status()
+        current_health = health_status["current_level"]
+        damage_taken = health_status["damage_taken"]
+        
+        health_icons = {
+            "Healthy": "💚", "Hurt": "💛", "Bloodied": "🧡",
+            "Down": "❤️", "Impaired": "💜"
+        }
+        
+        # Recursos
+        luck_data = self.character.get_luck()
+        magic_data = self.character.get_magic_points()
+        
+        return {
+            "info": {
+                "name": self.character.name,
+                "occupation": self.character.occupation or "N/A",
+                "age": self.character.age
+            },
+            "health": {
+                "icon": health_icons.get(current_health, '❓'),
+                "level": current_health,
+                "damage": damage_taken,
+            },
+            "resources": {
+                "luck": f"{luck_data['current']}/{luck_data['starting']}",
+                "magic": f"{magic_data['current']}/{magic_data['starting']}",
+            }
+        }
+    
+    def _build_info_table(self, status_data: Dict[str, Any]) -> Panel:
+        """Cria a tabela de informações básicas e saúde."""
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold cyan", justify="left")
+        table.add_column(justify="left")
+        
+        info = status_data["info"]
+        health = status_data["health"]
+        
+        table.add_row("NOME:", info["name"])
+        table.add_row("OCUPAÇÃO:", info["occupation"])
+        table.add_row("IDADE:", str(info["age"]))
+        table.add_row("SAÚDE:", f"{health['icon']} {health['level']} (Dano: {health['damage']})")
+        
+        return Panel(table, title="📋 PERSONAGEM", border_style="green")
+    
+    def _build_resources_table(self, status_data: Dict[str, Any]) -> Panel:
+        """Cria a tabela de recursos (Sorte, Magia)."""
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold yellow", justify="left")
+        table.add_column(justify="left")
+        
+        resources = status_data["resources"]
+        
+        table.add_row("SORTE:", resources["luck"])
+        table.add_row("MAGIA:", resources["magic"])
+        table.add_row("MOVIMENTO:", "8")
+        
+        return Panel(table, title="⚡ RECURSOS", border_style="yellow")
+    
+    def _build_choices_panel(self, choices: List[Dict[str, Any]]) -> Panel:
+        """Cria o painel de escolhas disponíveis com histórico integrado."""
+        content = Text()
+        
+        # 1. SEÇÃO HISTÓRICO
+        history = self.character.get_history()
+        if history:
+            content.append("HISTÓRICO:\n", style="bold yellow")
+            # Mostrar últimas 3 jogadas
+            recent_history = history[-3:] if len(history) > 3 else history
+            
+            for entry in recent_history:
+                if isinstance(entry, dict):
+                    page_num = entry.get('page_number', 0)
+                    choice_made = entry.get('choice_made', {})
+                    
+                    # Extrair texto da escolha
+                    choice_text = choice_made.get('text', 'Ação desconhecida')
+                    
+                    # Extrair resultado (goto, roll result, etc.)
+                    result_info = ""
+                    if 'goto_executed' in choice_made:
+                        result_info = f"(goto: {choice_made['goto_executed']})"
+                    elif 'roll_result' in choice_made:
+                        result_info = f"(roll: {choice_made.get('skill_used', 'desconhecido')}, resultado: {choice_made['roll_result']})"
+                    elif choice_made.get('goto'):
+                        result_info = f"(goto: {choice_made['goto']})"
+                    
+                    history_line = f"Página {page_num}: Escolheu \"{choice_text}\" {result_info}\n"
+                    content.append(history_line, style="dim white")
+            
+            content.append("\n")
+        
+        # 2. SEÇÃO ESCOLHAS ATUAIS
+        if not choices:
+            content.append("🏁 FIM DO JOGO - Nenhuma escolha disponível.", style="bold red")
+        else:
+            content.append("ESCOLHAS ATUAIS:\n", style="bold cyan")
+            for i, choice in enumerate(choices, 1):
+                choice_text = choice.get('text', 'Escolha sem texto')
+                
+                # Adicionar prefixo [SYSTEM] ou [ERROR] se for mensagem de sistema
+                if choice_text.startswith('[SYSTEM]') or choice_text.startswith('[ERROR]'):
+                    content.append(f"  {choice_text}\n", style="bold red")
+                else:
+                    content.append(f"[{i}] - {choice_text}\n", style="white")
+        
+        return Panel(content, title="🎯 ESCOLHAS DISPONÍVEIS", border_style="magenta")
     def _smart_truncate_text(self, text: str, max_chars: int = 50) -> str:
         """
         Trunca texto preservando palavras completas nos últimos N caracteres.
@@ -504,13 +672,9 @@ if __name__ == "__main__":
     character = Character()
     character.setup("Detective Smith", "Police Officer", 35, "Experienced detective")
     
-    # Criar página do jogo
-    game_page = GamePage(character, PAGES)
-    game_page.set_current_page(1)
+    # Criar cockpit do jogo
+    cockpit = Cockpit(character, PAGES)
+    cockpit.set_current_page(1)
     
-    # Gerar e exibir o prompt
-    prompt = game_page.generate_prompt()
-    print(prompt)
-    print("\n" + "="*80)
-    print("CHOICE SUMMARY:")
-    print(game_page.get_choice_summary())
+    # Renderizar a tela do jogo
+    cockpit.render_game_screen()

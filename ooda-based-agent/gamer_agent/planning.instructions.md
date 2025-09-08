@@ -79,9 +79,13 @@ Criar um agente OODA que pode interpretar e interagir com a estrutura de dados d
 - ✅ Manter validação de regras no Agent (retry loop + feedback de erro)
 - ✅ Tratar ocupação dinâmica via "set-occupation" (detecção + log informativo)
 
-#### Passo 3: Refatorar Cockpit - 🟡 PARCIALMENTE COMPLETO
+#### Passo 3: Refatorar Cockpit - ✅ COMPLETO
 - ✅ Garantir rendering adequado para todos adapters (dados estruturados implementados)
-- [ ] Adicionar prefixos [SYSTEM]/[ERROR] para mensagens
+- ✅ Adicionar prefixos [SYSTEM]/[ERROR] para mensagens
+- ✅ Renomear GamePage → Cockpit
+- ✅ Implementar render_game_screen() com rich.Panel e rich.Table
+- ✅ Integrar histórico nas escolhas disponíveis
+- ✅ Formatar choices como "[1] - texto da escolha"
 
 #### Passo 4: Atualizar main.py - ✅ COMPLETO
 - ✅ Implementar argparse para seleção de player type (`--player {demo,human,llm}`)
@@ -99,6 +103,43 @@ Criar um agente OODA que pode interpretar e interagir com a estrutura de dados d
 - ✅ `main.py` (COMPLETO - argparse + nova inicialização + dependency injection)
 - ✅ `automatica_gaming_agent.md` (documentação v1.2)
 - ✅ `planning.instructions.md` (este arquivo)
+
+### FASE 3: Sistema de UI/Logging Melhorado - ✅ COMPLETO
+
+**Status**: ✅ **IMPLEMENTAÇÃO COMPLETA**
+
+**Objetivo**: Implementar sistema de "tela de video-game" compacta com logging JSON separado e controle manual de fluxo.
+
+**Decisões Arquiteturais Implementadas:**
+- ✅ **Interface Compacta**: Cockpit renderiza informações em formato tabular tipo "video-game"
+- ✅ **Histórico Integrado**: Últimas 3 jogadas aparecem na seção de choices
+- ✅ **Logging Separado**: Dados JSON estruturados mostram código completo das choices
+- ✅ **Controle Manual**: Todos os modos (demo/humano/llm) requerem ENTER para avançar
+- ✅ **Output Limpo**: Removidos prints de diagnóstico desnecessários
+
+**Tarefas de Implementação Concluídas:**
+
+#### Subcomponente 1: Refatoração do Cockpit - ✅ COMPLETO
+- ✅ **cockpit.py**: Classe GamePage → Cockpit
+- ✅ **render_game_screen()**: Interface unificada usando rich.Panel e rich.Table
+- ✅ **_build_choices_panel()**: Histórico integrado + choices formatadas como "[1] - texto"
+- ✅ **Resultado**: Tela compacta tipo "video-game" com informações organizadas
+
+#### Subcomponente 2: Sistema de Logging JSON - ✅ COMPLETO
+- ✅ **agent.py _log_turn_summary()**: Log limpo com código completo da choice
+- ✅ **Estrutura JSON**: page, choice_selected.choice_data, execution_result
+- ✅ **Resultado**: Separação clara entre UI (cockpit) e dados (JSON)
+
+#### Subcomponente 3: Controle de Fluxo Manual - ✅ COMPLETO
+- ✅ **agent.py run()**: Pausa manual após cada log JSON
+- ✅ **Limpeza de Output**: Removidos prints de diagnóstico de _observe(), _orient()
+- ✅ **Resultado**: Controle total do usuário sobre o ritmo do jogo
+
+**✅ BENEFÍCIOS IMPLEMENTADOS:**
+- ✅ **Experiência Unificada**: Todos os modos têm a mesma interface compacta
+- ✅ **Controle Total**: Usuário avança no seu próprio ritmo
+- ✅ **Separação Clara**: UI visual separada dos dados técnicos
+- ✅ **Legibilidade**: Choices em texto, código em JSON, histórico integrado
 
 ### FASE 2: Sistema de Inicialização Randômica + Circuit Breaker - ✅ COMPLETO
 

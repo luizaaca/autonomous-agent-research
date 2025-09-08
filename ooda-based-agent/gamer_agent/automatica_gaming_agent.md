@@ -1,9 +1,9 @@
 # Documento de Design Técnico: Agente de Jogo Automático
 
-**Versão:** 1.2
+**Versão:** 1.3
 **Autor:** @luizaaca
 **Data:** 2025-09-07
-**Atualização:** Arquitetura PlayerInputAdapter confirmada
+**Atualização:** Sistema de UI/Logging Melhorado implementado
 
 ## 1. Visão Geral
 
@@ -89,8 +89,10 @@ O diagrama abaixo ilustra esta arquitetura alvo confirmada:
 ┌─────────┐ ┌─────────┐ ┌───────┐ ┌────────────────────┐
 │Character│ │GameRepo │ │Cockpit│ │ PlayerInputAdapter │
 │• No occ │ │• 112 pgs│ │• Rich │ │    (Interface)     │
-│  initial│ │• Cache  │ │ render│ │ • get_decision()   │
-│• Dynamic│ │         │ │       │ │ • returns int      │
+│  initial│ │• Cache  │ │• Video│ │ • get_decision()   │
+│• Dynamic│ │         │ │  Game │ │ • returns int      │
+│         │ │         │ │• JSON │ │                    │
+│         │ │         │ │  Log  │ │                    │
 └─────────┘ └─────────┘ └───────┘ └────────────────────┘
                                              ▲
                                              │
@@ -176,6 +178,59 @@ O fluxo de decisão principal segue o ciclo OODA, com a interação do `PlayerIn
 ```
 
 Este fluxo garante que o `Agent` mantenha a autoridade sobre a lógica e as regras do jogo, enquanto os `Adapters` focam exclusivamente na responsabilidade de interface com o jogador (seja ele um script, um humano ou uma IA).
+
+---
+
+## 2.4. Sistema de UI/Logging Melhorado (v1.3 - Implementado)
+
+**MELHORIAS IMPLEMENTADAS:**
+- **Interface "Video-Game"**: Cockpit compacto usando `rich.Panel` e `rich.Table`
+- **Logging JSON Separado**: Dados técnicos em formato JSON estruturado
+- **Controle Manual**: Pausa com ENTER em todos os modos
+- **Histórico Integrado**: Últimas jogadas aparecem na seção de choices
+
+### Fluxo de UI/Logging (v1.3):
+
+```
+[COCKPIT - TELA DE VIDEO-GAME]
+┌─────────────────────────────┐
+│ 📋 PERSONAGEM │ ⚡ RECURSOS │
+│ Nome: Agent   │ Sorte: 75/75 │
+│ Ocupação: N/A │ Magia: 14/14 │
+├─────────────────────────────┤
+│ 🎯 ESCOLHAS DISPONÍVEIS     │
+│ HISTÓRICO:                  │
+│ Página 1: "Police" (goto:9) │
+│                             │
+│ ESCOLHAS ATUAIS:            │
+│ [1] - Examinar a sala       │
+│ [2] - Usar magia            │
+└─────────────────────────────┘
+
+📋 LOG DA JOGADA:
+{
+  "page": 9,
+  "choice_selected": {
+    "index": 1,
+    "choice_data": {
+      "text": "Examinar a sala",
+      "goto": 15,
+      "effects": [...]
+    }
+  },
+  "execution_result": "Executada com sucesso"
+}
+
+> Pressione ENTER para continuar...
+```
+
+### Características do Sistema:
+
+1. **Interface Compacta**: Informações organizadas em tabelas visuais
+2. **Separação Clara**: UI visual separada dos dados técnicos JSON
+3. **Histórico Contextual**: Últimas 3 jogadas integradas nas choices
+4. **Controle Total**: Usuário avança no próprio ritmo
+5. **Output Limpo**: Sem prints de diagnóstico desnecessários
 
 ---
 
@@ -515,3 +570,55 @@ O arquivo `main.py` será o responsável por configurar e injetar o adaptador de
   - Iniciar o loop do jogo: `agent.run()`.
 
 Com este roteiro, a implementação se torna uma tarefa estruturada de criar os novos módulos e refatorar os existentes para acomodar a nova arquitetura flexível.
+
+---
+
+## 7. Status da Implementação Atual (v1.3)
+
+### ✅ Componentes Implementados:
+
+#### `Agent` (OODA Core)
+- **Status**: Completamente implementado e testado
+- **Características v1.3**:
+  - Loop OODA simplificado com pause manual universal
+  - Logging JSON estruturado via `_log_turn_summary()`
+  - Interface limpa sem prints de diagnóstico
+  - Controle de entrada para todos os player adapters
+
+#### `Cockpit` (Interface "Video-Game")
+- **Status**: Implementado com redesign completo
+- **Características v1.3**:
+  - Layout compacto usando `rich.Panel` e `rich.Table`
+  - Histórico integrado nas escolhas (últimas 3 jogadas)
+  - Formato "[1] - texto" para choices
+  - Separação visual clara entre informações
+
+#### `PlayerInputAdapter` (Arquitetura Flexível)
+- **Status**: Totalmente implementado com todos os adapters
+- **Implementações disponíveis**:
+  - `DemoAdapter`: Simulação automática para testes
+  - `HumanAdapter`: Interface para jogador humano  
+  - `LLMAdapter`: Integração com IA (estrutura preparada)
+
+#### `Character` & `GameRepository`
+- **Status**: Implementados e funcionais
+- **Características**: Sistema completo de stats, inventory e content management
+
+### 🧪 Teste de Validação:
+```bash
+# Sistema testado com sucesso em:
+python main.py --player demo
+
+# Output confirma:
+✅ Interface cockpit compacta
+✅ Choices no formato "[1] - texto"  
+✅ Histórico integrado
+✅ Logging JSON separado
+✅ Controle manual com ENTER
+```
+
+### 📋 Próximos Passos:
+- **Expansão de Content**: Adicionar mais páginas do jogo
+- **LLM Integration**: Implementar chamadas de API no LLMAdapter
+- **Performance**: Otimizações para históricos longos
+- **Testing**: Suíte de testes automatizados
