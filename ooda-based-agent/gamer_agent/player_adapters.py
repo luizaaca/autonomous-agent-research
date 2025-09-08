@@ -60,14 +60,22 @@ class DemoPlayerAdapter(PlayerInputAdapter):
                 print("[DemoPlayerAdapter] Nenhuma choice básica encontrada - usando primeira como fallback")
             return 1  # Primeira choice (base 1)
         
-        # Selecionar primeira choice válida
-        selected_index = valid_choice_indices[0]
-        
+        # *** ÚNICA ALTERAÇÃO LÓGICA AQUI ***
+        # Se houver múltiplas opções válidas, escolhe uma aleatoriamente.
+        # Caso contrário, escolhe a única opção disponível.
+        if len(valid_choice_indices) > 1:
+            selected_index = random.choice(valid_choice_indices)
+            self._last_decision_reason = f"Seleção aleatória entre {len(valid_choice_indices)} opções básicas."
+        else:
+            selected_index = valid_choice_indices[0]
+            self._last_decision_reason = "Única escolha básica disponível."
+
         if self.debug:
             choice_text = available_choices[selected_index].get('text', str(available_choices[selected_index])[:50])
+            print(f"[DemoPlayerAdapter] Razão: {self._last_decision_reason}")
             print(f"[DemoPlayerAdapter] Selecionada choice {selected_index + 1}: {choice_text}")
         
-        return selected_index + 1  # Converter para base 1
+        return selected_index + 1
     
     def _is_basic_choice(self, choice: Dict[str, Any]) -> bool:
         """

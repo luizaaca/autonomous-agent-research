@@ -1,3 +1,41 @@
+# INSTRUÇÕES DE PLANEJAMENTO
+
+Sempre use este arquivo para planejar mudanças significativas na estrutura de dados ou na lógica do agente. Documente o objetivo, o plano de ação e os detalhes do plano aqui antes de fazer alterações no código. Use a formatação de ckecklist para rastrear o progresso. Entende o teor do projeto e continue o desenvolvimento de forma incremental anexando ao fim do arquivo.
+
+## Objetivo Principal
+
+Criar um agente OODA que pode interpretar e interagir com a estrutura de dados do jogo de forma eficaz, conforme arquivo `ooda-based-agent\gamer_agent\automatica_gaming_agent.md`.
+
+## Plano de Ação e tarefas
+
+### FASE 4: Refatoração da UI e Lógica de Decisão (v1.4) - ✅ COMPLETO
+
+**Status**: ✅ **IMPLEMENTAÇÃO COMPLETA**
+
+**Objetivo**: Melhorar a clareza da interface de usuário (UI) e introduzir variabilidade no comportamento do agente de demonstração.
+
+**Decisões Arquiteturais Implementadas:**
+- ✅ **Separação do Histórico**: O histórico de decisões foi movido para um painel dedicado, separado das escolhas disponíveis, para uma UI mais limpa.
+- ✅ **Choices Descritivas**: As opções de escolha agora exibem detalhes de suas ações (`goto`, `roll`, `effects`), eliminando a ambiguidade de "escolhas sem texto".
+- ✅ **Decisão Aleatória no Modo Demo**: O `DefaultDecisionController` agora seleciona uma escolha aleatória quando há múltiplas opções simples, tornando a navegação menos determinística.
+
+**Tarefas de Implementação Concluídas:**
+
+#### Subcomponente 1: Refatoração do Cockpit (UI) - ✅ COMPLETO
+- ✅ **cockpit.py `render_game_screen()`**: Layout principal reorganizado para incluir um painel de histórico separado.
+- ✅ **cockpit.py `_build_history_panel()`**: Novo método criado para renderizar o painel de histórico.
+- ✅ **cockpit.py `_format_choice_text()`**: Novo método auxiliar para formatar o texto da escolha com detalhes de suas ações.
+- ✅ **cockpit.py `_build_choices_panel()`**: Refatorado para usar `_format_choice_text` e remover a lógica de histórico.
+
+#### Subcomponente 2: Lógica de Decisão Aleatória - ✅ COMPLETO
+- ✅ **default_decision_controller.py `_select_from_valid_choices()`**: Lógica atualizada para usar `random.choice()` quando há múltiplas escolhas simples e não condicionais.
+
+**✅ BENEFÍCIOS IMPLEMENTADOS:**
+- ✅ **Clareza da Interface**: A separação do histórico e as escolhas descritivas tornam a tela de jogo muito mais fácil de entender.
+- ✅ **Variabilidade do Agente**: O modo de demonstração agora pode explorar diferentes caminhos na história de forma autônoma.
+- ✅ **Manutenibilidade**: O código do `Cockpit` está mais organizado e com responsabilidades mais claras.
+
+---
 # INSTRUÇÕ### FASE 0: Correção Est### FASE 1: PlayerInputAdapter Architecture (v1.2) - ✅ COMPLETO
 
 **Status**: ✅ IMPLEMENTAÇÃO COMPLETA (Todos os passos finalizados com sucesso)
@@ -43,7 +81,7 @@ Criar um agente OODA que pode interpretar e interagir com a estrutura de dados d
 
 ### FASE 1: PlayerInputAdapter Architecture (v1.2) - 🟡 EM PROGRESSO
 
-**Status**: � IMPLEMENTAÇÃO PARCIAL (Passo 1 ✅ + Cockpit ✅, Agent e main.py pendentes)
+**Status**:  IMPLEMENTAÇÃO PARCIAL (Passo 1 ✅ + Cockpit ✅, Agent e main.py pendentes)
 
 **Decisões Arquiteturais Confirmadas:**
 - ✅ Opção C: Evolução DecisionController → PlayerInputAdapter
@@ -184,7 +222,3 @@ Criar um agente OODA que pode interpretar e interagir com a estrutura de dados d
 - ✅ **Teste de Compatibilidade**: Confirmado que o efeito "set-occupation" funciona como esperado.
 - ✅ **Documentação**: `planning.instructions.md` (este arquivo) atualizado para refletir a conclusão da FASE 2.
 ```
-
-
-
-

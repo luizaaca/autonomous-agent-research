@@ -440,277 +440,71 @@ class Agent:
     def perform_action(self, choice):
         """
         Executa a ação decidida, aplicando efeitos e rolagens de dados.
-        Choice já foi validado em _decide(), então procede diretamente com execução.
+        Retorna uma tupla com o (outcome, next_page).
         """
-        # VALIDAÇÃO CRÍTICA: Verificar se choice está em formato válido
         if not self._validate_choice(choice):
-            print("ERRO CRÍTICO: Choice inválida recebida")
             raise ValueError(f"Choice inválida: {choice}")
         
         outcome = choice.get("outcome", "")
-        
+        next_page = self.current_page
+
         try:
-            # 1. Aplicar efeitos imediatos da escolha
             if "effects" in choice:
                 self._process_effects(choice["effects"])
 
-            # 2. Executar rolagens de dados, se necessário
             if "roll" in choice:
-                
                 roll_data = choice["roll"]
-                
-                # Detectar se roll é uma string (formato simples) ou dicionário (formato complexo)
                 if isinstance(roll_data, str):
-                    # Formato simples: "roll": "Fighting"
-                    skill_name = roll_data
-                    difficulty = choice.get("difficulty", "normal")
-                    bonus_dice = choice.get("bonus_dice", False)
-                    penalty_dice = choice.get("penalty_dice", False)
-                    results = choice.get("results", {})
+                    skill_name, difficulty, results = roll_data, choice.get("difficulty", "normal"), choice.get("results", {})
                 elif isinstance(roll_data, dict):
-                    # Formato complexo: "roll": {"skill": "INT", "difficulty": "hard", ...}
-                    skill_name = roll_data.get("skill")
-                    difficulty = roll_data.get("difficulty", "normal")
-                    bonus_dice = roll_data.get("bonus_dice", False)
-                    penalty_dice = roll_data.get("penalty_dice", False)
-                    results = roll_data.get("results", {})
+                    skill_name, difficulty, results = roll_data.get("skill"), roll_data.get("difficulty", "normal"), roll_data.get("results", {})
                 else:
-                    print(f"ERRO: Formato de 'roll' inválido: {roll_data}")
-                    raise ValueError(f"Formato de 'roll' inválido: {roll_data}. Deve ser string ou dicionário.")
+                    raise ValueError(f"Formato de 'roll' inválido: {roll_data}")
 
-                # Validar skill_name
-                if not skill_name or not isinstance(skill_name, str):
-                    print(f"ERRO: Nome de perícia inválido: {skill_name}")
-                    raise ValueError(f"Nome de perícia inválido: {skill_name}. Deve ser uma string válida.")
+                roll_result = self.character.roll_skill(skill_name, "common", difficulty=difficulty) or \
+                              self.character.roll_skill(skill_name, "combat", difficulty=difficulty) or \
+                              self.character.roll_skill(skill_name, "expert", difficulty=difficulty) or \
+                              self.character.roll_characteristic(skill_name, difficulty=difficulty)
 
-                # Validar difficulty
-                if difficulty not in ["normal", "hard"]:
-                    print(f"AVISO: Dificuldade inválida '{difficulty}'. Usando 'normal'.")
-                    difficulty = "normal"
-                
-                # Converter difficulty para formato da Character
-                character_difficulty = "regular" if difficulty == "normal" else "hard"
-                
-                print(f"Performing roll for skill '{skill_name}' with difficulty: {difficulty}")
-                
-                # Validar bonus_dice e penalty_dice
-                bonus_dice = bool(bonus_dice) if isinstance(bonus_dice, (bool, int)) else False
-                penalty_dice = bool(penalty_dice) if isinstance(penalty_dice, (bool, int)) else False
+                if not roll_result or not roll_result.get("success"):
+                    raise Exception(f"Falha na rolagem de '{skill_name}'")
 
-                # Usar o método robusto da classe Character para rolagens
-                roll_result = None
-                try:
-                    # Tentar como habilidade primeiro
-                    for skill_type in ["common", "combat", "expert"]:
-                        roll_result = self.character.roll_skill(
-                            skill_name, skill_type, 
-                            bonus_dice=bonus_dice, 
-                            penalty_dice=penalty_dice,
-                            difficulty=character_difficulty,
-                            auto_apply_modifiers=True
-                        )
-                        if roll_result.get("success", False):
-                            break
-                    else:
-                        # Se não encontrar como habilidade, tentar como característica
-                        roll_result = self.character.roll_characteristic(
-                            skill_name,
-                            bonus_dice=bonus_dice,
-                            penalty_dice=penalty_dice,
-                            difficulty=character_difficulty
-                        )
-                        if not roll_result.get("success", False):
-                            print(f"ERRO: '{skill_name}' não encontrado como habilidade ou característica.")
-                            raise Exception(f"'{skill_name}' not found as skill or characteristic")
-                    
-                    # Verificar se roll_result foi bem-sucedido
-                    if not roll_result.get("success", False):
-                        print(f"ERRO: Failed to roll for '{skill_name}': {roll_result.get('error', 'Unknown error')}")
-                        raise Exception(f"Failed to roll for '{skill_name}'")
-                    
-                    # Extrair informações do resultado
-                    level = roll_result["level"]
-                    roll_value = roll_result["roll"]
-                    target_value = roll_result["target"]
-                    
-                    print(f"Rolled {skill_name}: {roll_value} vs {target_value} -> Level {level}")
-                    
-                except Exception as e:
-                    print(f"ERRO na rolagem: {e}")
-                    raise Exception(f"Erro na rolagem: {e}")
-
-                # Processa os resultados baseados no nível de sucesso
-                if not isinstance(results, dict):
-                    print(f"ERRO: 'results' deve ser um dicionário: {results}")
-                    results = {}
+                level = roll_result["level"]
+                print(f"Rolled {skill_name}: {roll_result['roll']} vs {roll_result['target']} -> Level {level}")
                 
                 result = results.get(str(level))
-                
                 if result:
-                    # Para formato complexo, result pode ser um número (goto direto) ou dict com outcome/effects/goto
                     if isinstance(result, int):
-                        # Resultado simples: apenas o número da página
-                        if result > 0:  # Validar página válida
-                            self.current_page = result
-                            print(f"Navigating to page {result} based on roll result.")
-                        else:
-                            print(f"ERRO: Página inválida {result}. Mantendo página atual.")
+                        if result >= 0: next_page = result
                     elif isinstance(result, dict):
-                        # Resultado complexo: contém outcome, effects, goto
-                        outcome = result.get("outcome", outcome)
-                        if "effects" in result:
-                            self._process_effects(result["effects"])
-                        if "goto" in result:
-                            goto_page = result["goto"]
-                            if isinstance(goto_page, int) and goto_page > 0:
-                                self.current_page = goto_page
-                                print(f"Navigating to page {goto_page} based on roll result.")
-                            else:
-                                print(f"ERRO: Página 'goto' inválida: {goto_page}. Mantendo página atual.")
-                else:
-                    print(f"AVISO: Nenhum resultado encontrado para nível {level}. Mantendo página atual.")
-            
-            # 2.5. Executar rolagens de sorte (luck_roll) - refatorado para usar Character
+                        if "effects" in result: self._process_effects(result["effects"])
+                        if "goto" in result and isinstance(result["goto"], int) and result["goto"] >= 0:
+                            next_page = result["goto"]
+
             elif "luck_roll" in choice and choice["luck_roll"]:
-                try:
-                    # Usar o método robusto da classe Character para rolagem de sorte
-                    roll_result = self.character.roll_luck()
-                    
-                    # Extrair informações do resultado
-                    level = roll_result["level"]
-                    roll_value = roll_result["roll"]
-                    luck_value = roll_result["target"]
-                    
-                    print(f"Rolled Luck: {roll_value} vs {luck_value} -> Level {level}")
-                    
-                except Exception as e:
-                    print(f"ERRO na rolagem de sorte: {e}")
-                    raise Exception(f"Erro na rolagem de sorte: {e}")
+                roll_result = self.character.roll_luck()
+                level = roll_result["level"]
+                print(f"Rolled Luck: {roll_result['roll']} vs {roll_result['target']} -> Level {level}")
                 
-                # Processa o resultado da rolagem de sorte
                 results = choice.get("results", {})
-                if not isinstance(results, dict):
-                    print(f"ERRO: 'results' para luck_roll deve ser um dicionário: {results}")
-                    return outcome
-                    
-                result = results.get(str(level))
-                if not result: # Fallback para o nível de sucesso mais próximo
-                     for i in range(level - 1, 0, -1):
-                        result = results.get(str(i))
-                        if result:
-                            break
-                
+                result = results.get(str(level)) or next((results.get(str(i)) for i in range(level - 1, 0, -1) if results.get(str(i))), None)
                 if result:
-                    outcome = result.get("outcome", outcome)
-                    if "effects" in result:
-                        self._process_effects(result["effects"])
-                    if "goto" in result:
-                        goto_page = result["goto"]
-                        if isinstance(goto_page, int) and goto_page > 0:
-                            self.current_page = goto_page
-                            print(f"Navigating to page {goto_page} based on luck roll.")
-                        else:
-                            print(f"ERRO: Página 'goto' inválida: {goto_page}. Mantendo página atual.")
+                    if "effects" in result: self._process_effects(result["effects"])
+                    if "goto" in result and isinstance(result["goto"], int) and result["goto"] >= 0:
+                        next_page = result["goto"]
 
-            # 3. Opposed roll
-            elif "opposed_roll" in choice:
-                skill_to_roll = choice["opposed_roll"]
-                if not isinstance(skill_to_roll, str):
-                    print(f"ERRO: 'opposed_roll' deve ser uma string: {skill_to_roll}")
-                    return outcome
-                    
-                opponent_skill = choice.get("opponent_skill", {"full": 30, "half": 15})
-                if not isinstance(opponent_skill, dict):
-                    print(f"ERRO: 'opponent_skill' deve ser um dicionário: {opponent_skill}")
-                    opponent_skill = {"full": 30, "half": 15}
-                    
-                results = choice.get("outcomes", {})
-                if not isinstance(results, dict):
-                    print(f"ERRO: 'outcomes' deve ser um dicionário: {results}")
-                    return outcome
-
-                # Usar o método robusto da classe Character para teste oposto
-                roll_result = None
-                try:
-                    roll_result = self.character.opposed_roll(
-                        skill_to_roll, 
-                        "common",  # Tentar common primeiro
-                        opponent_skill["full"],
-                        opponent_skill["half"]
-                    )
-                    if not roll_result.get("success", False):
-                        raise KeyError(f"Failed to roll {skill_to_roll} as common skill")
-                except KeyError:
-                    # Se não estiver em common, tentar combat
-                    try:
-                        roll_result = self.character.opposed_roll(
-                            skill_to_roll, 
-                            "combat",
-                            opponent_skill["full"],
-                            opponent_skill["half"]
-                        )
-                        if not roll_result.get("success", False):
-                            raise KeyError(f"Failed to roll {skill_to_roll} as combat skill")
-                    except KeyError:
-                        # Se não estiver em combat, tentar expert
-                        try:
-                            roll_result = self.character.opposed_roll(
-                                skill_to_roll, 
-                                "expert",
-                                opponent_skill["full"],
-                                opponent_skill["half"]
-                            )
-                            if not roll_result.get("success", False):
-                                raise KeyError(f"Failed to roll {skill_to_roll} as expert skill")
-                        except KeyError:
-                            print(f"ERRO: Perícia '{skill_to_roll}' não encontrada para teste oposto.")
-                            raise KeyError(f"Perícia '{skill_to_roll}' não encontrada para teste oposto.")
-                
-                if not roll_result or not roll_result.get("success", False):
-                    print(f"ERRO: Falha na rolagem oposta: {roll_result}")
-                    raise Exception(f"Falha na rolagem oposta para {skill_to_roll}")
-                
-                # Extrair informações do resultado
-                result_key = roll_result["outcome"]  # "win", "lose", "draw"
-                agent_level = roll_result["my_roll"]["level"]
-                agent_roll = roll_result["my_roll"]["roll"]
-                opponent_level = roll_result["opponent_roll"]["level"]
-                opponent_roll = roll_result["opponent_roll"]["roll"]
-                
-                print(f"Agente Rolled {skill_to_roll}: {agent_roll} -> Level {agent_level}")
-                print(f"Oponente Rolled: {opponent_roll} -> Level {opponent_level}")
-                print(f"Resultado: {result_key}")
-                
-                if result_key in results:
-                    result = results[result_key]
-                    if isinstance(result, dict):
-                        if "effects" in result:
-                            self._process_effects(result["effects"])
-                        if "goto" in result and isinstance(result["goto"], int) and result["goto"] > 0:
-                            self.current_page = result["goto"]
-                            print(f"{result_key.upper()}: Navigating to page {result['goto']}.")
-                        outcome = result.get("outcome", outcome)
-                    else:
-                        print(f"ERRO: Resultado '{result_key}' deve ser um dicionário: {result}")
-
-            # 4. Navegação direta (sem rolagem)
             elif "goto" in choice:
                 goto_page = choice["goto"]
-                if isinstance(goto_page, int) and goto_page > 0:
-                    print(f"Navigating directly to page {goto_page}.")
-                    self.current_page = goto_page
+                if isinstance(goto_page, int) and goto_page >= 0:
+                    next_page = goto_page
                 else:
-                    print(f"ERRO: Página 'goto' inválida: {goto_page}. Mantendo página atual.")
-            
-            else:
-                print(f"AVISO: Nenhuma ação reconhecida na choice: {choice}")
-                
+                    print(f"ERRO: Página 'goto' inválida: {goto_page}")
+
         except Exception as e:
             print(f"ERRO CRÍTICO durante execução da ação: {e}")
-            print(f"Choice problemática: {choice}")
-            outcome = f"Erro durante execução: {str(e)}"
+            outcome = f"Erro de Execução: {str(e)}"
             
-        return outcome
+        return outcome, next_page
 
     def run(self):
         """
@@ -738,11 +532,10 @@ class Agent:
                 print(f"   - Limite máximo: {self.max_choice_retries}")
                 break
             
-            print(f"Agente escolheu: {chosen_action}")
             
             # 4. Act
             try:
-                outcome = self.perform_action(chosen_action)
+                outcome, next_page = self.perform_action(chosen_action)
                 
                 # Se a ação foi bem-sucedida, reseta o contador de falhas.
                 self.failed_choices_count = 0
@@ -754,6 +547,8 @@ class Agent:
                         choice_index = i
                         break
                 self._log_turn_summary(chosen_action, choice_index or 1, outcome)
+                self.cockpit.render_game_screen()
+                print(f"Agente escolheu: {chosen_action}")
                 
                 # PAUSA MANUAL: Aguardar ENTER para continuar (todos os modos)
                 try:
@@ -779,6 +574,9 @@ class Agent:
             
             self._record_choice_in_history(page_text, chosen_action, choice_index, outcome)
             
+            # Navegação para a próxima página
+            self.current_page = next_page
+
             # Condição de parada
             if self.current_page == 0:
                 print("Fim da história (goto: 0).")

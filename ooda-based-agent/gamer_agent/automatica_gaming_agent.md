@@ -9,7 +9,7 @@
 
 Este documento detalha a arquitetura e as especificações para um sistema de agente de jogo avançado. O objetivo é criar uma estrutura robusta e extensível que suporte múltiplos modos de interação (demonstração, jogador humano e IA via LLM) e que seja baseada em uma análise completa das mecânicas do jogo "The Domestic".
 
-O design segue as melhores práticas de desenvolvimento de software e jogos, incluindo a separação de responsabilidades, o uso de padrões de design como **Repository** e **Dependency Injection**, e a criação de uma especificação detalhada da ficha de personagem e da lógica condicional do jogo.
+O design segue as melhores práticas de desenvolvimento de jogos, incluindo a separação de responsabilidades, o uso de padrões de design como **Repository** e **Dependency Injection**, e a criação de uma especificação detalhada da ficha de personagem e da lógica condicional do jogo.
 
 ---
 
@@ -181,13 +181,14 @@ Este fluxo garante que o `Agent` mantenha a autoridade sobre a lógica e as regr
 
 ---
 
-## 2.4. Sistema de UI/Logging Melhorado (v1.3 - Implementado)
+### 2.4. Sistema de UI/Logging Melhorado (v1.3 - Implementado)
 
 **MELHORIAS IMPLEMENTADAS:**
-- **Interface "Video-Game"**: Cockpit compacto usando `rich.Panel` e `rich.Table`
-- **Logging JSON Separado**: Dados técnicos em formato JSON estruturado
-- **Controle Manual**: Pausa com ENTER em todos os modos
-- **Histórico Integrado**: Últimas jogadas aparecem na seção de choices
+- **Interface "Video-Game"**: Cockpit compacto usando `rich.Panel` e `rich.Table`.
+- **Logging JSON Separado**: Dados técnicos em formato JSON estruturado.
+- **Controle Manual**: Pausa com ENTER em todos os modos.
+- **Histórico Separado**: Últimas jogadas aparecem em um painel dedicado para maior clareza.
+- **Choices Descritivas**: As opções de escolha agora detalham suas ações (e.g., `goto`, `roll`, `effects`).
 
 ### Fluxo de UI/Logging (v1.3):
 
@@ -198,13 +199,15 @@ Este fluxo garante que o `Agent` mantenha a autoridade sobre a lógica e as regr
 │ Nome: Agent   │ Sorte: 75/75 │
 │ Ocupação: N/A │ Magia: 14/14 │
 ├─────────────────────────────┤
+│ 📜 HISTÓRICO DE DECISÕES    │
+│ Página 1: Escolheu "Se você é um Policial (Police Officer)" (goto: 9)
+├─────────────────────────────┤
+│ SITUAÇÃO ATUAL              │
+│ ...texto da página atual... │
+├─────────────────────────────┤
 │ 🎯 ESCOLHAS DISPONÍVEIS     │
-│ HISTÓRICO:                  │
-│ Página 1: "Police" (goto:9) │
-│                             │
 │ ESCOLHAS ATUAIS:            │
-│ [1] - Examinar a sala       │
-│ [2] - Usar magia            │
+│ [1] - (goto: 17)            │
 └─────────────────────────────┘
 
 📋 LOG DA JOGADA:
@@ -213,9 +216,7 @@ Este fluxo garante que o `Agent` mantenha a autoridade sobre a lógica e as regr
   "choice_selected": {
     "index": 1,
     "choice_data": {
-      "text": "Examinar a sala",
-      "goto": 15,
-      "effects": [...]
+      "goto": 17
     }
   },
   "execution_result": "Executada com sucesso"
@@ -226,11 +227,11 @@ Este fluxo garante que o `Agent` mantenha a autoridade sobre a lógica e as regr
 
 ### Características do Sistema:
 
-1. **Interface Compacta**: Informações organizadas em tabelas visuais
-2. **Separação Clara**: UI visual separada dos dados técnicos JSON
-3. **Histórico Contextual**: Últimas 3 jogadas integradas nas choices
-4. **Controle Total**: Usuário avança no próprio ritmo
-5. **Output Limpo**: Sem prints de diagnóstico desnecessários
+1. **Interface Compacta**: Informações organizadas em tabelas visuais.
+2. **Separação Clara**: UI visual separada dos dados técnicos JSON.
+3. **Histórico Dedicado**: O histórico de decisões é exibido em seu próprio painel.
+4. **Choices Informativas**: As escolhas mostram os detalhes de suas ações, eliminando ambiguidades.
+5. **Controle Total**: Usuário avança no próprio ritmo.
 
 ---
 
@@ -435,7 +436,7 @@ class PlayerInputAdapter(ABC):
 
 #### a) `DemoPlayerAdapter`
 - **Propósito**: Executar o jogo de forma não interativa para demonstrações ou testes.
-- **Lógica**: Utilizará a lógica do `DefaultDecisionController` atual para tomar decisões (primeira escolha válida, respeito às condicionais de ocupação, etc.).
+- **Lógica**: Utilizará a lógica do `DefaultDecisionController`. Se houver múltiplas escolhas simples (não condicionais), uma será selecionada **aleatoriamente** para variar a jogabilidade. Caso contrário (escolha única ou condicional), a primeira opção válida será selecionada.
 - **Fluxo**: `Agent` chama `get_decision` → `DemoPlayerAdapter` aplica lógica de decisão → Encontra choice no array → Retorna o índice da escolha (int).
 - **Implementação**: Interno ao adapter, sem exposição do DecisionController.
 
@@ -589,20 +590,20 @@ Com este roteiro, a implementação se torna uma tarefa estruturada de criar os 
 - **Status**: Implementado com redesign completo
 - **Características v1.3**:
   - Layout compacto usando `rich.Panel` e `rich.Table`
-  - Histórico integrado nas escolhas (últimas 3 jogadas)
-  - Formato "[1] - texto" para choices
-  - Separação visual clara entre informações
+  - **Histórico exibido em painel dedicado** para maior clareza.
+  - **Formato descritivo para choices**, detalhando suas ações (e.g., `[1] - (goto: 17)`).
+  - Separação visual clara entre informações.
 
 #### `PlayerInputAdapter` (Arquitetura Flexível)
 - **Status**: Totalmente implementado com todos os adapters
 - **Implementações disponíveis**:
-  - `DemoAdapter`: Simulação automática para testes
-  - `HumanAdapter`: Interface para jogador humano  
-  - `LLMAdapter`: Integração com IA (estrutura preparada)
+  - `DemoAdapter`: Simulação automática para testes, **com lógica de decisão aleatória para escolhas simples**.
+  - `HumanAdapter`: Interface para jogador humano.
+  - `LLMAdapter`: Integração com IA (estrutura preparada).
 
 #### `Character` & `GameRepository`
 - **Status**: Implementados e funcionais
-- **Características**: Sistema completo de stats, inventory e content management
+- **Características**: Sistema completo de stats, inventory e content management.
 
 ### 🧪 Teste de Validação:
 ```bash
@@ -610,9 +611,9 @@ Com este roteiro, a implementação se torna uma tarefa estruturada de criar os 
 python main.py --player demo
 
 # Output confirma:
-✅ Interface cockpit compacta
-✅ Choices no formato "[1] - texto"  
-✅ Histórico integrado
+✅ Interface cockpit compacta e reorganizada
+✅ Choices no formato descritivo
+✅ Histórico em painel separado
 ✅ Logging JSON separado
 ✅ Controle manual com ENTER
 ```

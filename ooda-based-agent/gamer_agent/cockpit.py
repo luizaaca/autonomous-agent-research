@@ -56,19 +56,26 @@ class Cockpit:
     
     def render_game_screen(self) -> None:
         """
-        Renderiza e exibe a tela de jogo completa como uma "tela de video-game".
+        Renderiza e exibe a tela de jogo completa, incluindo status, histórico,
+        situação atual e escolhas.
         
-        Este é o método principal que centraliza toda a UI do jogo, criando
-        uma apresentação compacta e organizada usando rich.
+        Este é o método principal que centraliza toda a UI do jogo.
         """
-        # 1. Obter dados do personagem
+        # 1. Limpar console
+        self.console.clear()
+
+        # 2. Obter dados do personagem
         status_data = self._get_character_status_data()
         
-        # 2. Construir tabelas de status
-        info_table = self._build_info_table(status_data)
-        resources_table = self._build_resources_table(status_data)
-        
-        # 3. Construir texto da página atual
+        # 3. Construir painéis de status
+        info_panel = self._build_info_table(status_data)
+        resources_panel = self._build_resources_table(status_data)
+        status_layout = Columns([info_panel, resources_panel], equal=True)
+
+        # 4. Construir painel de histórico
+        history_panel = self._build_history_panel()
+
+        # 5. Construir painel da situação atual
         page_text = self.current_page_data.get('text', 'Página não encontrada.')
         page_panel = Panel(
             Text(page_text, style="white"),
@@ -76,17 +83,17 @@ class Cockpit:
             border_style="cyan"
         )
         
-        # 4. Construir lista de escolhas
+        # 6. Construir painel de escolhas
         choices = self.current_page_data.get('choices', [])
         choices_panel = self._build_choices_panel(choices)
         
-        # 5. Montar layout principal
-        status_layout = Columns([info_table, resources_table], equal=True)
-        
-        # Criar grid principal
+        # 7. Montar layout principal em um grid
         main_grid = Table.grid(padding=(1, 0), expand=True)
         main_grid.add_column()
         main_grid.add_row(status_layout)
+        if history_panel:
+            main_grid.add_row("")
+            main_grid.add_row(history_panel)
         main_grid.add_row("")
         main_grid.add_row(page_panel)
         main_grid.add_row("")
@@ -99,8 +106,7 @@ class Cockpit:
             expand=False
         )
         
-        # 6. Renderizar na tela
-        self.console.clear()
+        # 8. Renderizar na tela
         self.console.print(main_panel)
     
     def _get_character_status_data(self) -> Dict[str, Any]:
@@ -167,55 +173,104 @@ class Cockpit:
         table.add_row("MOVIMENTO:", "8")
         
         return Panel(table, title="⚡ RECURSOS", border_style="yellow")
+
+    def _build_history_panel(self) -> Optional[Panel]:
+        """
+        Cria um painel com o histórico das últimas decisões do jogador.
+        Retorna None se não houver histórico.
+        """
+        history = self.character.get_history()
+        if not history:
+            return None
+
+        content = Text()
+        # Mostrar últimas 3 jogadas
+        recent_history = history[-3:] if len(history) > 3 else history
+        
+        for entry in recent_history:
+            if isinstance(entry, dict):
+                page_num = entry.get('page_number', 0)
+                choice_made = entry.get('choice_made', {})
+                
+                choice_text = choice_made.get('text', '')
+                # Se não houver texto, formata a ação para dar contexto
+                if not choice_text:
+                    choice_text = self._format_choice_text(choice_made)
+                else:
+                    choice_text = f'"{choice_text}"'
+
+                result_info = ""
+                if 'goto_executed' in choice_made:
+                    result_info = f" (goto: {choice_made['goto_executed']})"
+
+                history_line = f"Página {page_num}: Escolheu {choice_text}{result_info}\n"
+                content.append(history_line, style="dim white")
+        
+        return Panel(content, title="📜 HISTÓRICO DE DECISÕES", border_style="yellow")
+
+    def _format_choice_text(self, choice: Dict[str, Any]) -> str:
+        """
+        Formata o dicionário de uma escolha em um texto descritivo e legível.
+        """
+        # Se a escolha tiver um texto explícito, use-o como base
+        text = choice.get('text', '')
+
+        details = []
+        # Adiciona detalhes sobre as ações da escolha
+        if 'goto' in choice:
+            details.append(f"goto: {choice['goto']}")
+        if 'set-occupation' in choice:
+            details.append(f"set-occupation: '{choice['set-occupation']}'")
+        if 'roll' in choice:
+            details.append(f"roll: {choice['roll']}")
+        if 'luck_roll' in choice:
+            details.append("roll: luck")
+        if 'opposed_roll' in choice:
+            details.append(f"opposed_roll: {choice['opposed_roll']}")
+        if 'effects' in choice:
+            effects_desc = []
+            for effect in choice['effects']:
+                action = effect.get('action', 'unknown_action')
+                if action == 'take_damage':
+                    effects_desc.append(f"damage: {effect.get('amount', '?')}")
+                elif action == 'gain_skill':
+                    effects_desc.append(f"gain_skill: {effect.get('skill', '?')}")
+                elif action == 'spend_magic':
+                    effects_desc.append(f"spend_magic: {effect.get('amount', '?')}")
+                else:
+                    effects_desc.append(action)
+            details.append(f"effects: {', '.join(effects_desc)}")
+
+        # Monta a string final
+        if details:
+            details_str = f"({', '.join(details)})"
+            return f"{text} {details_str}" if text else details_str
+        
+        return text or "Ação sem descrição"
     
     def _build_choices_panel(self, choices: List[Dict[str, Any]]) -> Panel:
-        """Cria o painel de escolhas disponíveis com histórico integrado."""
+        """
+        Cria o painel que exibe apenas as escolhas atualmente disponíveis para o jogador.
+        A lógica de histórico foi movida para _build_history_panel.
+        """
         content = Text()
         
-        # 1. SEÇÃO HISTÓRICO
-        history = self.character.get_history()
-        if history:
-            content.append("HISTÓRICO:\n", style="bold yellow")
-            # Mostrar últimas 3 jogadas
-            recent_history = history[-3:] if len(history) > 3 else history
-            
-            for entry in recent_history:
-                if isinstance(entry, dict):
-                    page_num = entry.get('page_number', 0)
-                    choice_made = entry.get('choice_made', {})
-                    
-                    # Extrair texto da escolha
-                    choice_text = choice_made.get('text', 'Ação desconhecida')
-                    
-                    # Extrair resultado (goto, roll result, etc.)
-                    result_info = ""
-                    if 'goto_executed' in choice_made:
-                        result_info = f"(goto: {choice_made['goto_executed']})"
-                    elif 'roll_result' in choice_made:
-                        result_info = f"(roll: {choice_made.get('skill_used', 'desconhecido')}, resultado: {choice_made['roll_result']})"
-                    elif choice_made.get('goto'):
-                        result_info = f"(goto: {choice_made['goto']})"
-                    
-                    history_line = f"Página {page_num}: Escolheu \"{choice_text}\" {result_info}\n"
-                    content.append(history_line, style="dim white")
-            
-            content.append("\n")
-        
-        # 2. SEÇÃO ESCOLHAS ATUAIS
         if not choices:
             content.append("🏁 FIM DO JOGO - Nenhuma escolha disponível.", style="bold red")
         else:
             content.append("ESCOLHAS ATUAIS:\n", style="bold cyan")
             for i, choice in enumerate(choices, 1):
-                choice_text = choice.get('text', 'Escolha sem texto')
+                # Formata a escolha de forma detalhada
+                formatted_text = self._format_choice_text(choice)
                 
                 # Adicionar prefixo [SYSTEM] ou [ERROR] se for mensagem de sistema
-                if choice_text.startswith('[SYSTEM]') or choice_text.startswith('[ERROR]'):
-                    content.append(f"  {choice_text}\n", style="bold red")
+                if formatted_text.startswith('[SYSTEM]') or formatted_text.startswith('[ERROR]'):
+                    content.append(f"  {formatted_text}\n", style="bold red")
                 else:
-                    content.append(f"[{i}] - {choice_text}\n", style="white")
+                    content.append(f"[{i}] - {formatted_text}\n", style="white")
         
         return Panel(content, title="🎯 ESCOLHAS DISPONÍVEIS", border_style="magenta")
+    
     def _smart_truncate_text(self, text: str, max_chars: int = 50) -> str:
         """
         Trunca texto preservando palavras completas nos últimos N caracteres.
