@@ -108,7 +108,7 @@ class Agent:
         
         # VALIDAÇÃO CRÍTICA: Verificar se choices está em formato válido
         if not self._validate_choices(choices):
-            print("ERRO CRÍTICO: Lista de choices inválida. Usando ação de fallback.")
+            print("ERRO CRÍTICO: Lista de choices inválida.")
             raise Exception("Invalid choices format")
         
         # Loop de retry para validação de regras (máximo 3 tentativas)
@@ -141,16 +141,6 @@ class Agent:
                     print(f"  {key}: {value}")
                 print("=" * 50)
                 
-                # RESOLUÇÃO DE CONDITIONAL_ON: Se choice tem conditional_on, resolvê-lo
-                if 'conditional_on' in chosen_choice:
-                    resolved_choice = self._resolve_conditional_choice(chosen_choice)
-                    print(f"🎯 CHOICE RESOLVIDO PARA OCUPAÇÃO:")
-                    print("=" * 50)
-                    for key, value in resolved_choice.items():
-                        print(f"  {key}: {value}")
-                    print("=" * 50)
-                    return resolved_choice
-                
                 return chosen_choice
             else:
                 # FAILURE: Increment circuit breaker counter
@@ -175,20 +165,11 @@ class Agent:
                     print("🚨 Circuit Breaker será ativado na próxima tentativa")
                     print("🛑 Forçando fallback para evitar loop infinito...")
                     
-                    # Fallback de emergência: retornar primeira choice básica
-                    for choice in choices:
-                        if self._is_basic_choice(choice):
-                            print(f"🔄 Usando fallback choice: {choice.get('text', 'N/A')}")
-                            return choice
-                    
-                    # Se nenhuma choice básica, retornar primeira disponível
-                    print(f"🔄 Usando primeira choice disponível: {choices[0].get('text', 'N/A')}")
-                    return choices[0]
+                    raise Exception("Circuit Breaker Activated - Max failed choices reached")
                 
                 if attempt >= max_attempts:
                     print("⚠️  Máximo de tentativas excedido no loop atual.")
-                    # Continue para próxima tentativa, circuit breaker decide se para
-                    break
+                    raise Exception("Max attempts exceeded in decision loop")
                 
                 print(f"🔄 Solicitando nova escolha... (Tentativa {attempt + 1}/{max_attempts})")
         
@@ -215,13 +196,13 @@ class Agent:
         # Determinar qual path usar
         if current_occupation in paths:
             resolved_choice = paths[current_occupation].copy()
-            print(f"🎯 Usando path para ocupação '{current_occupation}'")
+            print(f"Usando path para ocupação '{current_occupation}'")
         elif 'default' in paths:
             resolved_choice = paths['default'].copy()
-            print(f"🎯 Usando path 'default' (ocupação atual: {current_occupation or 'None'})")
+            print(f"Usando path 'default' (ocupação atual: {current_occupation or 'None'})")
         else:
             # Não deveria acontecer se validação passou, mas fallback de segurança
-            print(f"⚠️  ERRO: Nenhum path encontrado para ocupação '{current_occupation}' e sem default")
+            print(f"ERRO: Nenhum path encontrado para ocupação '{current_occupation}' e sem default")
             return choice
         
         # Preservar texto original se não houver no path resolvido
@@ -448,7 +429,17 @@ class Agent:
         outcome = choice.get("outcome", "")
         next_page = self.current_page
 
+        print(f"🚀 Executando ação: {choice.get('text', 'N/A')}")
+
         try:
+            # Resolver conditional_on se presente
+            choice = self._resolve_conditional_choice(choice)
+
+            if "set-occupation" in choice:
+                new_occupation = choice["set-occupation"]
+                self.character.set_occupation(new_occupation)
+                print(f"OCUPAÇÃO DEFINIDA: {new_occupation}")
+
             if "effects" in choice:
                 self._process_effects(choice["effects"])
 

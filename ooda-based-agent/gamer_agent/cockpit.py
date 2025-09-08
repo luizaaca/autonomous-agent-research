@@ -126,6 +126,23 @@ class Cockpit:
         
         # 8. Renderizar na tela
         self.console.print(main_panel)
+        
+        # DEBUG: Exibir atributos do objeto Character abaixo do cockpit
+        debug_data = {
+            "name": self.character.name,
+            "occupation": self.character.occupation,
+            "age": self.character.age,
+            "health": self.character.get_health_status(),
+            "luck": self.character.get_luck(),
+            "magic": self.character.get_magic_points(),
+            "characteristics": {k: self.character.get_characteristic(k) for k in ["STR", "CON", "DEX", "INT", "POW"]},
+            "skills": self.character.get_all_skills(),
+            "inventory": self.character.get_inventory(),
+            "modifiers": self.character.get_modifiers(),
+            "history": self.character.get_history()[-3:]  # últimas 3 decisões
+        }
+        debug_json = json.dumps(debug_data, indent=2, ensure_ascii=False)
+        self.console.print(Panel(Text(debug_json, style="dim"), title="DEBUG: Character State", border_style="red"))
     
     def _get_character_status_data(self) -> Dict[str, Any]:
         """
