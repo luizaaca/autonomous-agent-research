@@ -1,12 +1,12 @@
 from character import Character
 from cockpit import Cockpit
-from player_input_adapter import PlayerInputAdapter
+from player_strategy_interface import PlayerStrategy
 from typing import Dict, Any
 
 class Agent:
-    def __init__(self, game_repository: Dict[int, Dict], player_input_adapter: PlayerInputAdapter, debug_mode: bool = False):
+    def __init__(self, game_repository: Dict[int, Dict], player_input_adapter: PlayerStrategy, debug_mode: bool = False):
         """
-        Inicializa o Agent com arquitetura PlayerInputAdapter v1.2.
+        Inicializa o Agent com arquitetura PlayerInputStrategy v1.2.
         
         Args:
             character: Instância da classe Character (pode ter occupation=None inicialmente)
@@ -18,7 +18,7 @@ class Agent:
         self.game_data = game_repository
         self.combat_status = {}
         
-        # Nova arquitetura v1.2: PlayerInputAdapter
+        # Nova arquitetura v1.2: PlayerInputStrategy
         self.player_input_adapter = player_input_adapter
         
         # Circuit Breaker Pattern - Previne loops infinitos
@@ -118,7 +118,7 @@ class Agent:
             current_page_number = self.cockpit.current_page_number
             current_page = self.game_data.get(current_page_number, {})
 
-            # Usar PlayerInputAdapter para obter choice_index (base 1)
+            # Usar PlayerInputStrategy para obter choice_index (base 1)
             choice_index = self.player_input_adapter.get_decision(choices, character_data, history, current_page, current_page_number)
 
             # Conversão para base 0 e obtenção do choice dict
@@ -512,7 +512,7 @@ class Agent:
             # 2. Orient
             self._orient(page_text)
             
-            # 3. Decide (usando PlayerInputAdapter v1.2)
+            # 3. Decide (usando PlayerInputStrategy v1.2)
             chosen_action = self._decide(choices)
             
             # CIRCUIT BREAKER CHECK: Se _decide retornar None, encerrar execução

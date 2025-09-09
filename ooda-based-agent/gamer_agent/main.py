@@ -12,10 +12,9 @@ Usage:
 import argparse
 import os
 import sys
-from character import Character
 from game_repository import GameRepository
 from agent import Agent
-from player_adapters import DemoPlayerAdapter, HumanPlayerAdapter, LLMPlayerAdapter
+from player_strategy import DemoPlayerAdapter, HumanPlayerAdapter, LLMPlayerAdapter
 
 
 def main():

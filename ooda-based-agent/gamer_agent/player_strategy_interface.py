@@ -1,5 +1,5 @@
 """
-Player Input Adapter Module - Interface abstrata para adaptadores de entrada
+Player Strategy Module - Interface abstrata para estratégias de jogador
 
 Este módulo define a interface que todos os adaptadores de entrada de jogador
 devem implementar, seguindo o padrão Adapter para desacoplar a lógica de
@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any
 
 
-class PlayerInputAdapter(ABC):
+class PlayerStrategy(ABC):
     """
     Interface abstrata para adaptadores de entrada do jogador.
     Define o contrato para obter uma decisão de um jogador,
@@ -18,7 +18,7 @@ class PlayerInputAdapter(ABC):
     """
     
     @abstractmethod
-    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any], history: List[Dict[str, Any]], current_page_data: Dict[str, Any], current_page: int) -> int:
+    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any], history: List[Dict[str, Any]], current_page_data: Dict[str, Any], current_page_number: int) -> int:
         """
         Obtém o índice da escolha selecionada pelo jogador.
 
