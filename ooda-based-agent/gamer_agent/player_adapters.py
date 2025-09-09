@@ -6,9 +6,261 @@ para diferentes modos de jogo: demonstração, humano e IA.
 """
 
 from player_input_adapter import PlayerInputAdapter
-from typing import List, Dict, Any
+from typing import Dict, List, Any, Optional
+from rich.panel import Panel
+from rich.table import Table
+from rich.columns import Columns
+from rich.text import Text
+from rich.console import Console
 import os
 import random
+
+
+class RenderConsole:
+    """
+    Encapsula toda a lógica de renderização da UI do jogo para um jogador humano,
+    utilizando a biblioteca Rich para criar um "cockpit" informativo no console.
+    """
+    def __init__(self):
+        self.console = Console()
+
+    def render_game_screen(self, choices: List[Dict[str, Any]], character_data: Dict[str, Any], history: List[Dict[str, Any]], current_page_data: Dict[str, Any], current_page_number: int) -> None:
+        """
+        Renderiza e exibe a tela de jogo completa, incluindo status, histórico,
+        situação atual e escolhas.
+        
+        Este é o método principal que centraliza toda a UI do jogo.
+        """
+        # 1. Limpar console
+        os.system("cls" if os.name == "nt" else "clear")
+        self.console.clear()
+
+        print(f"[RenderConsole] Renderizando tela do jogo - Página {current_page_number}\ncharacter_data keys: {list(character_data.keys())}, history entries: {len(history)}, choices: {len(choices)}")
+        # 2. Construir painéis de status
+        info_panel = self._build_info_table(character_data)
+        resources_panel = self._build_resources_table(character_data)
+        attributes_panel = self._build_attributes_table(character_data)
+        skills_panel = self._build_skills_table(character_data)
+
+        status_layout = Columns([
+            info_panel,
+            resources_panel,
+            attributes_panel,
+            skills_panel
+        ], equal=True)
+
+        # 3. Construir painel de histórico
+        history_panel = self._build_history_panel(history)
+
+        # 4. Construir painel da situação atual
+        page_text = current_page_data.get('text', 'Página não encontrada.')
+        page_panel = Panel(
+            Text(page_text, style="white"),
+            title="SITUAÇÃO ATUAL",
+            border_style="cyan"
+        )
+        
+        # 5. Construir painel de escolhas
+        choices_panel = self._build_choices_panel(choices)
+        
+        # 6. Montar layout principal em um grid
+        main_grid = Table.grid(padding=(1, 0), expand=True)
+        main_grid.add_column()
+        main_grid.add_row(status_layout)
+        if history_panel:
+            main_grid.add_row("")
+            main_grid.add_row(history_panel)
+        main_grid.add_row("")
+        main_grid.add_row(page_panel)
+        main_grid.add_row("")
+        main_grid.add_row(choices_panel)
+        
+        main_panel = Panel(
+            main_grid,
+            title=f"🎮 COCKPIT - PÁGINA {current_page_number}",
+            border_style="bold blue",
+            expand=False
+        )
+        
+        # 7. Renderizar na tela
+        self.console.print(main_panel)
+
+    def _build_info_table(self, status_data: Dict[str, Any]) -> Panel:
+        """Cria a tabela de informações básicas e saúde."""
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold cyan", justify="left")
+        table.add_column(justify="left")
+        
+        info = status_data["character_info"]
+        health = status_data["health_status"]
+        
+        table.add_row("NOME:", info["name"])
+        table.add_row("OCUPAÇÃO:", info["occupation"])
+        table.add_row("IDADE:", str(info["age"]))
+        table.add_row("SAÚDE:", f"{health['icon']} {health['current_level']} (Dano: {health['damage_taken']})")
+        
+        return Panel(table, title="📋 PERSONAGEM", border_style="green")
+    
+    def _build_resources_table(self, status_data: Dict[str, Any]) -> Panel:
+        """Cria a tabela de recursos (Sorte, Magia)."""
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold yellow", justify="left")
+        table.add_column(justify="left")
+        
+        resources = status_data["resources"]
+
+        table.add_row("SORTE:", f"{resources['luck']['current']}/{resources['luck']['starting']}")
+        table.add_row("MAGIA:", f"{resources['magic']['current']}/{resources['magic']['starting']}")
+
+        return Panel(table, title="⚡ RECURSOS", border_style="yellow")
+
+    def _build_attributes_table(self, status_data: Dict[str, Any]) -> Panel:
+        """Cria a tabela de atributos (características)."""
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold red", justify="left")
+        table.add_column(justify="left", max_width=2)
+        
+        characteristics = status_data.get("characteristics", {})
+        
+        if not characteristics:
+            table.add_row("N/A", "")
+        else:
+            for name, values in characteristics.items():
+                table.add_row(f"{name}:", str(values.get('full', '')))
+            
+        return Panel(table, title="📊 ATRIBUTOS", border_style="red")
+
+    def _build_skills_table(self, status_data: Dict[str, Any]) -> Panel:
+        """Cria a tabela de habilidades."""
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold blue", justify="left")
+        table.add_column(justify="left", max_width=2)
+        
+        skills = status_data.get("skills", {})        
+        
+        if not skills:
+            table.add_row("Nenhuma", "")
+        else:
+            for name, values in sorted(skills.items()):
+                table.add_row(f"{name}:", f"{values.get('full', 0)}%")
+            
+        return Panel(table, title="🎯 HABILIDADES", border_style="blue")
+
+    def _build_history_panel(self, history: List[Dict[str, Any]]) -> Optional[Panel]:
+        """
+        Cria um painel com o histórico das últimas decisões do jogador.
+        Retorna None se não houver histórico.
+        """
+        if not history:
+            return None
+
+        content = Text()
+        # Mostrar últimas 5 jogadas
+        recent_history = history[-5:]
+        
+        for entry in recent_history:
+            if isinstance(entry, dict):
+                page_num = entry.get('page_number', 0)
+                choice_made = entry.get('choice_made', {})
+                
+                choice_text = choice_made.get('text', '')
+                # Se não houver texto, formata a ação para dar contexto
+                if not choice_text:
+                    choice_text = self._format_choice_text(choice_made)
+                else:
+                    choice_text = f'"{choice_text}"'
+
+                # Construir string de resultado detalhado
+                result_parts = []
+                if 'roll_result' in choice_made:
+                    success_str = "SUCESSO" if choice_made.get('success') else "FALHA"
+                    skill = choice_made.get('skill_used', 'N/A')
+                    roll = choice_made.get('roll_result', 'N/A')
+                    target = choice_made.get('target_value', 'N/A')
+                    result_parts.append(f"Rolagem de {skill}: {roll} vs {target} -> {success_str}")
+
+                if 'effects_applied' in choice_made and choice_made['effects_applied']:
+                    effects_str_parts = []
+                    for eff in choice_made['effects_applied']:
+                        action = eff.get('action', 'unknown')
+                        param = eff.get('amount') or eff.get('skill') or ''
+                        effects_str_parts.append(f"{action}({param})")
+                    result_parts.append(f"Efeitos: {', '.join(effects_str_parts)}")
+
+                if 'goto_executed' in choice_made:
+                    result_parts.append(f"goto: {choice_made['goto_executed']}")
+                
+                result_info = ""
+                if result_parts:
+                    result_info = f" -> Resultado: {'; '.join(result_parts)}"
+
+                history_line = f"Página {page_num}: Escolheu {choice_text}{result_info}\n"
+                content.append(history_line, style="dim white")
+        
+        return Panel(content, title="📜 HISTÓRICO DE DECISÕES", border_style="yellow")
+    
+    def _build_choices_panel(self, choices: List[Dict[str, Any]]) -> Panel:
+        """
+        Cria o painel que exibe apenas as escolhas atualmente disponíveis para o jogador.
+        A lógica de histórico foi movida para _build_history_panel.
+        """
+        content = Text()
+        
+        if not choices:
+            content.append("🏁 FIM DO JOGO - Nenhuma escolha disponível.", style="bold red")
+        else:
+            content.append("ESCOLHAS ATUAIS:\n", style="bold cyan")
+            for i, choice in enumerate(choices, 1):
+                # Formata a escolha de forma detalhada
+                formatted_text = self._format_choice_text(choice)
+                
+                # Adicionar prefixo [SYSTEM] ou [ERROR] se for mensagem de sistema
+                if formatted_text.startswith('[SYSTEM]') or formatted_text.startswith('[ERROR]'):
+                    content.append(f"  {formatted_text}\n", style="bold red")
+                else:
+                    content.append(f"[{i}] - {formatted_text}\n", style="white")
+        
+        return Panel(content, title="🎯 ESCOLHAS DISPONÍVEIS", border_style="magenta")
+
+    def _format_choice_text(self, choice: Dict[str, Any]) -> str:
+        """
+        Formata o dicionário de uma escolha em um texto descritivo e legível.
+        """
+        # Se a escolha tiver um texto explícito, use-o como base
+        text = choice.get('text', '')
+
+        details = []
+        # Adiciona detalhes sobre as ações da escolha
+        if 'goto' in choice:
+            details.append(f"goto: {choice['goto']}")
+        if 'set-occupation' in choice:
+            details.append(f"set-occupation: '{choice['set-occupation']}'")
+        if 'roll' in choice:
+            details.append(f"roll: {choice['roll']}")
+        if 'luck_roll' in choice:
+            details.append("roll: luck")
+        if 'opposed_roll' in choice:
+            details.append(f"opposed_roll: {choice['opposed_roll']}")
+        if 'effects' in choice:
+            effects_desc = []
+            for effect in choice['effects']:
+                action = effect.get('action', 'unknown_action')
+                if action == 'take_damage':
+                    effects_desc.append(f"damage: {effect.get('amount', '?')}")
+                elif action == 'gain_skill':
+                    effects_desc.append(f"gain_skill: {effect.get('skill', '?')}")
+                elif action == 'spend_magic':
+                    effects_desc.append(f"spend_magic: {effect.get('amount', '?')}")
+                else:
+                    effects_desc.append(action)
+            details.append(f"effects: {', '.join(effects_desc)}")
+
+        # Monta a string final
+        if details:
+            details_str = f"({', '.join(details)})"
+            return f"{text} {details_str}" if text else details_str
+        
+        return text or "Ação sem descrição"
 
 
 class DemoPlayerAdapter(PlayerInputAdapter):
@@ -25,156 +277,48 @@ class DemoPlayerAdapter(PlayerInputAdapter):
             debug: Se True, exibe informações de debug durante a decisão.
         """
         self.debug = debug
+        self.renderer = RenderConsole()
         self._last_decision_reason = ""
     
-    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any]) -> int:
+    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any], history: List[Dict[str, Any]], current_page_data: Dict[str, Any], current_page_number: int ) -> int:
         """
         Toma decisão automática baseada na lógica internalizada do DefaultDecisionController.
         
         Args:
             available_choices: Lista de choices disponíveis
-            character_data: Dados estruturados do personagem (não usado no modo demo)
-            
+            character_data: Dados estruturados do personagem 
+            history: Histórico de decisões anteriores 
+
         Returns:
             Índice (base 1) da escolha selecionada
         """
         if self.debug:
             print(f"[DemoPlayerAdapter] Processando {len(available_choices)} choices")
-        
+
+        self.renderer.render_game_screen(
+            choices=available_choices,
+            character_data=character_data,
+            history=history,
+            current_page_data=current_page_data,
+            current_page_number=current_page_number
+        )
+
         # Validação básica
         if not available_choices:
             raise Exception("Lista de choices vazia - não é possível tomar decisão")
         
-        # Processar choices válidas (lógica simplificada)
-        valid_choice_indices = []
-        
-        for i, choice in enumerate(available_choices):
-            # Para o modo demo, consideramos todas as choices básicas como válidas
-            # Choices condicionais requerem validação específica no Agent
-            if self._is_basic_choice(choice):
-                valid_choice_indices.append(i)
-        
-        # Se não encontrou choices válidas, usar a primeira como fallback
-        if not valid_choice_indices:
-            if self.debug:
-                print("[DemoPlayerAdapter] Nenhuma choice básica encontrada - usando primeira como fallback")
-            return 1  # Primeira choice (base 1)
-        
-        # *** ÚNICA ALTERAÇÃO LÓGICA AQUI ***
-        # Se houver múltiplas opções válidas, escolhe uma aleatoriamente.
-        # Caso contrário, escolhe a única opção disponível.
-        if len(valid_choice_indices) > 1:
-            selected_index = random.choice(valid_choice_indices)
-            self._last_decision_reason = f"Seleção aleatória entre {len(valid_choice_indices)} opções básicas."
+        if len(available_choices) > 1:
+            selected_index = random.choice(range(len(available_choices)))
+            self._last_decision_reason = f"Seleção aleatória entre {len(available_choices)} opções básicas."
         else:
-            selected_index = valid_choice_indices[0]
+            selected_index = 0
             self._last_decision_reason = "Única escolha básica disponível."
 
-        if self.debug:
-            choice_text = available_choices[selected_index].get('text', str(available_choices[selected_index])[:50])
-            print(f"[DemoPlayerAdapter] Razão: {self._last_decision_reason}")
-            print(f"[DemoPlayerAdapter] Selecionada choice {selected_index + 1}: {choice_text}")
+        choice_text = available_choices[selected_index].get('text', str(available_choices[selected_index])[:50])
+        print(f"[DemoPlayerAdapter] Razão: {self._last_decision_reason}")
+        print(f"[DemoPlayerAdapter] Selecionada choice {selected_index + 1}: {choice_text}")
         
         return selected_index + 1
-    
-    def _is_basic_choice(self, choice: Dict[str, Any]) -> bool:
-        """
-        Verifica se uma choice é básica (não requer validação especial).
-        
-        Args:
-            choice: Choice a ser verificada
-            
-        Returns:
-            True se for uma choice básica
-        """
-        # Choice básica: tem 'goto' e não tem condicionais complexas
-        if 'goto' in choice and 'conditional_on' not in choice:
-            return True
-        
-        # Choice com roll também é considerada básica para demo
-        if any(key in choice for key in ['roll', 'luck_roll', 'opposed_roll']):
-            return True
-            
-        return False
-    
-    def _format_compact_cockpit(self, character_data: Dict[str, Any]) -> str:
-        """
-        Formata dados do personagem em formato compacto para telas 480p.
-        
-        Args:
-            character_data: Dados estruturados do personagem do cockpit
-            
-        Returns:
-            String formatada de forma compacta e tabular
-        """
-        lines = []
-        
-        # Linha 1: Info básica | Status de saúde | Recursos
-        char_info = character_data.get('character_info', {})
-        health = character_data.get('health_status', {})
-        resources = character_data.get('resources', {})
-        
-        line1_parts = [
-            f"{char_info.get('name', 'Unknown')} ({char_info.get('occupation', 'N/A')}, {char_info.get('age', 0)})",
-            f"{health.get('icon', '❓')} {health.get('current_level', 'Unknown')} (DMG:{health.get('damage_taken', 0)})",
-            f"Luck:{resources.get('luck', {}).get('current', 0)}/{resources.get('luck', {}).get('starting', 0)} Magic:{resources.get('magic', {}).get('current', 0)}/{resources.get('magic', {}).get('starting', 0)} Mov:{resources.get('movement', 8)}"
-        ]
-        lines.append("📋 " + " | ".join(line1_parts))
-        
-        # Linha 2: Características principais
-        characteristics = character_data.get('characteristics', {})
-        char_parts = []
-        for char_name in ["STR", "CON", "DEX", "INT", "POW"]:
-            char_data = characteristics.get(char_name, {})
-            if char_data:
-                char_parts.append(f"{char_name}:{char_data.get('full', 0)}")
-        lines.append("📊 " + " ".join(char_parts))
-        
-        # Linha 3: Habilidades principais (compactas)
-        skills = character_data.get('skills', {})
-        skill_parts = []
-        
-        # Habilidades comuns mais importantes
-        common_skills = skills.get('common', {})
-        for skill in ['Athletics', 'Observation', 'Navigate']:
-            if skill in common_skills:
-                skill_parts.append(f"{skill}:{common_skills[skill].get('full', 0)}%")
-        
-        # Habilidades de combate
-        combat_skills = skills.get('combat', {})
-        for skill in ['Fighting', 'Firearms']:
-            if skill in combat_skills:
-                skill_parts.append(f"{skill}:{combat_skills[skill].get('full', 0)}%")
-        
-        lines.append("🎯 " + " ".join(skill_parts))
-        
-        # Linha 4: Inventário e modificadores (se houver)
-        inventory = character_data.get('inventory', {})
-        modifiers = character_data.get('modifiers', [])
-        
-        line4_parts = []
-        
-        # Inventário resumido
-        items = []
-        if inventory.get('equipment'):
-            items.extend(inventory['equipment'][:2])  # Primeiros 2 items
-        if inventory.get('weapons'):
-            items.extend(inventory['weapons'][:2])    # Primeiras 2 armas
-        
-        if items:
-            line4_parts.append(f"Items: {', '.join(items)}")
-        else:
-            line4_parts.append("Items: Empty")
-        
-        # Modificadores ativos (resumidos)
-        if modifiers:
-            mod_count = len(modifiers)
-            line4_parts.append(f"Modifiers: {mod_count} active")
-        
-        if line4_parts:
-            lines.append("🎒 " + " | ".join(line4_parts))
-        
-        return "\n".join(lines)
 
 
 class HumanPlayerAdapter(PlayerInputAdapter):
@@ -182,8 +326,8 @@ class HumanPlayerAdapter(PlayerInputAdapter):
     Adapter para jogador humano via console.
     Implementa input loop com validação para capturar escolhas do usuário.
     """
-    
-    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any]) -> int:
+
+    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any], history: List[Dict[str, Any]], current_page_data: Dict[str, Any], current_page_number: int) -> int:
         """
         Captura decisão do jogador humano via console input.
         
@@ -377,8 +521,8 @@ class LLMPlayerAdapter(PlayerInputAdapter):
         if not self.api_key:
             print("⚠️  Aviso: API key não fornecida. LLMPlayerAdapter usará fallback para DemoPlayerAdapter")
             self._fallback_adapter = DemoPlayerAdapter(debug=True)
-    
-    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any]) -> int:
+
+    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any], history: List[Dict[str, Any]], current_page_data: Dict[str, Any], current_page_number: int) -> int:
         """
         Obtém decisão de uma API de LLM.
         

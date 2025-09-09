@@ -53,14 +53,16 @@ Exemplos:
         default='en',
         help='Idioma do jogo (padrão: en)'
     )
+
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Ativa o modo de depuração com logs detalhados'
+    )
     
     args = parser.parse_args()
     
     try:
-        # Character sem ocupação inicial - definida dinamicamente via "set-occupation" effect
-        print("[INFO] Criando personagem sem ocupação inicial...")
-        character = Character(name="Agent", occupation=None)
-        
         # Game Repository com cache das 112 páginas
         print("[INFO] Carregando repositório do jogo...")
         game_repo = GameRepository(lang=args.lang)
@@ -90,7 +92,6 @@ Exemplos:
         # Instanciar Agent com dependency injection (arquitetura v1.2)
         print("[INFO] Inicializando Agent com nova arquitetura PlayerInputAdapter...")
         agent = Agent(
-            character=character,
             game_repository=game_repo,
             player_input_adapter=player_adapter
         )

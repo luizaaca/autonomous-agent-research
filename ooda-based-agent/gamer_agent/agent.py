@@ -4,7 +4,7 @@ from player_input_adapter import PlayerInputAdapter
 from typing import Dict, Any
 
 class Agent:
-    def __init__(self, character: Character, game_repository: Dict[int, Dict], player_input_adapter: PlayerInputAdapter):
+    def __init__(self, game_repository: Dict[int, Dict], player_input_adapter: PlayerInputAdapter, debug_mode: bool = False):
         """
         Inicializa o Agent com arquitetura PlayerInputAdapter v1.2.
         
@@ -13,9 +13,9 @@ class Agent:
             game_repository: Dicionário com todas as páginas do jogo
             player_input_adapter: Adapter para captura de entrada do jogador
         """
-        self.character = character
+        self._debug_mode = debug_mode
+        character = Character() 
         self.game_data = game_repository
-        self.current_page = 1
         self.combat_status = {}
         
         # Nova arquitetura v1.2: PlayerInputAdapter
@@ -26,15 +26,15 @@ class Agent:
         self.max_choice_retries = 3
         
         # Criar instância do Cockpit para visualização rica
-        self.cockpit = Cockpit(self.character, game_repository)
+        self.cockpit = Cockpit(character, game_repository)
 
     @property
     def sheet(self):
         """Propriedade de compatibilidade para código que ainda acessa self.sheet"""
-        return self.character.sheet
+        return self.cockpit.character.sheet
 
     def __repr__(self):
-        return f"Agent(Name: {self.character.name}, Occupation: {self.character.occupation})"
+        return f"Agent(Name: {self.cockpit.character.name}, Occupation: {self.cockpit.character.occupation})"
 
     def _smart_truncate_text(self, text: str, max_chars: int = 200) -> str:
         """
@@ -80,7 +80,6 @@ class Agent:
 
     def _decide(self, choices):
         """
-        Decide qual ação tomar usando PlayerInputAdapter (Arquitetura v1.2).
         Implementa Circuit Breaker Pattern e validação de regras conforme seção 5.4.
         
         Args:
@@ -89,25 +88,17 @@ class Agent:
         Returns:
             choice dict selecionado e validado, ou None se circuit breaker ativado
         """
-        # CIRCUIT BREAKER: Verificar se já excedeu máximo de falhas
-        if self.failed_choices_count >= self.max_choice_retries:
-            error_msg = f"[CIRCUIT BREAKER] Máximo de tentativas ({self.max_choice_retries}) excedido para escolhas falhadas consecutivas. Encerrando execução para evitar loop infinito."
-            print(f"🚨 {error_msg}")
-            
-            # Adicionar ao histórico
-            if hasattr(self.character, 'add_to_history'):
-                self.character.add_to_history(
-                    page_number=self.current_page,
-                    page_text="[SYSTEM CIRCUIT BREAKER]",
-                    choice_made={"system_error": error_msg},
+        
+        if not self._validate_choices(choices):
+            self.failed_choices_count += 1
+            # Adicionar erro ao histórico do character para contexto futuro
+            if hasattr(self.cockpit.character, 'add_to_history'):
+                self.cockpit.character.add_to_history(
+                    page_number=self.cockpit.current_page_number,
+                    page_text="[SYSTEM]",
+                    choice_made={"error": "Lista de choices inválida."},
                     choice_index=0
                 )
-            
-            print("🛑 Execução interrompida para preservar estabilidade do sistema")
-            return None  # Sinaliza para o run() encerrar
-        
-        # VALIDAÇÃO CRÍTICA: Verificar se choices está em formato válido
-        if not self._validate_choices(choices):
             print("ERRO CRÍTICO: Lista de choices inválida.")
             raise Exception("Invalid choices format")
         
@@ -120,10 +111,16 @@ class Agent:
             
             # Obter dados estruturados do cockpit
             character_data = self.cockpit.render_character_status()
-            
+
+            # Obter histórico detalhado do personagem
+            history = self.cockpit.character.get_history()
+
+            current_page_number = self.cockpit.current_page_number
+            current_page = self.game_data.get(current_page_number, {})
+
             # Usar PlayerInputAdapter para obter choice_index (base 1)
-            choice_index = self.player_input_adapter.get_decision(choices, character_data)
-            
+            choice_index = self.player_input_adapter.get_decision(choices, character_data, history, current_page, current_page_number)
+
             # Conversão para base 0 e obtenção do choice dict
             chosen_choice = choices[choice_index - 1]
             
@@ -151,10 +148,10 @@ class Agent:
                 print(f"❌ {error_message}")
                 
                 # Adicionar erro ao histórico do character para contexto futuro
-                if hasattr(self.character, 'add_to_history'):
+                if hasattr(self.cockpit.character, 'add_to_history'):
                     # Usar método moderno se disponível
-                    self.character.add_to_history(
-                        page_number=self.current_page,
+                    self.cockpit.character.add_to_history(
+                        page_number=self.cockpit.current_page_number,
                         page_text="[SYSTEM]",
                         choice_made={"error": error_message},
                         choice_index=choice_index
@@ -173,8 +170,7 @@ class Agent:
                 
                 print(f"🔄 Solicitando nova escolha... (Tentativa {attempt + 1}/{max_attempts})")
         
-        # Nunca deveria chegar aqui, mas safety fallback
-        return choices[0]
+        raise Exception("Failed to obtain a valid choice after multiple attempts")
     
     def _resolve_conditional_choice(self, choice: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -189,8 +185,8 @@ class Agent:
         if choice.get('conditional_on') != 'occupation':
             # Se não é conditional_on occupation, retornar como está
             return choice
-        
-        current_occupation = self.character.occupation
+
+        current_occupation = self.cockpit.character.occupation
         paths = choice.get('paths', {})
         
         # Determinar qual path usar
@@ -224,7 +220,7 @@ class Agent:
         # Validação de conditional_on (ocupação)
         if 'conditional_on' in choice:
             if choice['conditional_on'] == 'occupation':
-                current_occupation = self.character.occupation
+                current_occupation = self.cockpit.character.occupation
                 
                 # Verificar se tem paths definidos
                 paths = choice.get('paths', {})
@@ -282,13 +278,13 @@ class Agent:
             print(f"AVISO: 'effects' deve ser uma lista, recebido: {type(effects)}. Ignorando efeitos.")
             return
 
-        occupation_before = self.character.occupation
+        occupation_before = self.cockpit.character.occupation
         
         # Usar o método robusto da classe Character
-        result = self.character.apply_effects(effects)
+        result = self.cockpit.character.apply_effects(effects)
         
         # Verificar se ocupação foi definida/alterada
-        occupation_after = self.character.occupation
+        occupation_after = self.cockpit.character.occupation
         if occupation_before != occupation_after:
             print(f"🎯 OCUPAÇÃO DEFINIDA: {occupation_before or 'None'} → {occupation_after}")
             print(f"📋 Personagem agora tem acesso a habilidades e choices específicas de {occupation_after}")
@@ -366,7 +362,7 @@ class Agent:
             return True
         
         # Obtém a ocupação atual do agente (refatorado para usar Character)
-        current_occupation = self.character.occupation or "default"
+        current_occupation = self.cockpit.character.occupation or "default"
         
         # Obtém os paths disponíveis
         paths = conditional_choice.get("paths", {})
@@ -427,9 +423,10 @@ class Agent:
             raise ValueError(f"Choice inválida: {choice}")
         
         outcome = choice.get("outcome", "")
-        next_page = self.current_page
+        next_page = self.cockpit.current_page_number
 
-        print(f"🚀 Executando ação: {choice.get('text', 'N/A')}")
+        print(f"🚀 Executando ação: {choice}")
+        print("=" * 50)
 
         try:
             # Resolver conditional_on se presente
@@ -437,7 +434,7 @@ class Agent:
 
             if "set-occupation" in choice:
                 new_occupation = choice["set-occupation"]
-                self.character.set_occupation(new_occupation)
+                self.cockpit.character.set_occupation(new_occupation)
                 print(f"OCUPAÇÃO DEFINIDA: {new_occupation}")
 
             if "effects" in choice:
@@ -452,10 +449,10 @@ class Agent:
                 else:
                     raise ValueError(f"Formato de 'roll' inválido: {roll_data}")
 
-                roll_result = self.character.roll_skill(skill_name, "common", difficulty=difficulty) or \
-                              self.character.roll_skill(skill_name, "combat", difficulty=difficulty) or \
-                              self.character.roll_skill(skill_name, "expert", difficulty=difficulty) or \
-                              self.character.roll_characteristic(skill_name, difficulty=difficulty)
+                roll_result = self.cockpit.character.roll_skill(skill_name, "common", difficulty=difficulty) or \
+                              self.cockpit.character.roll_skill(skill_name, "combat", difficulty=difficulty) or \
+                              self.cockpit.character.roll_skill(skill_name, "expert", difficulty=difficulty) or \
+                              self.cockpit.character.roll_characteristic(skill_name, difficulty=difficulty)
 
                 if not roll_result or not roll_result.get("success"):
                     raise Exception(f"Falha na rolagem de '{skill_name}'")
@@ -473,7 +470,7 @@ class Agent:
                             next_page = result["goto"]
 
             elif "luck_roll" in choice and choice["luck_roll"]:
-                roll_result = self.character.roll_luck()
+                roll_result = self.cockpit.character.roll_luck()
                 level = roll_result["level"]
                 print(f"Rolled Luck: {roll_result['roll']} vs {roll_result['target']} -> Level {level}")
                 
@@ -494,13 +491,17 @@ class Agent:
         except Exception as e:
             print(f"ERRO CRÍTICO durante execução da ação: {e}")
             outcome = f"Erro de Execução: {str(e)}"
-            
+        
+        print("=" * 50)
         return outcome, next_page
 
     def run(self):
         """
         Executa o ciclo OODA principal para navegar pelo livro-jogo.
         """
+        # Configurar a página inicial no Cockpit
+        self.cockpit.set_current_page(1)
+
         while True:
             # 1. Observe
             page_text, choices = self._observe()
@@ -518,8 +519,7 @@ class Agent:
             if chosen_action is None:
                 print("🚨 CIRCUIT BREAKER ATIVADO - Encerrando execução do agente")
                 print("📊 Estatísticas da sessão:")
-                print(f"   - Página atual: {self.current_page}")
-                print(f"   - Falhas consecutivas: {self.failed_choices_count}")
+                print(f"   - Página atual: {self.cockpit.current_page_number}")
                 print(f"   - Limite máximo: {self.max_choice_retries}")
                 break
             
@@ -529,7 +529,6 @@ class Agent:
                 outcome, next_page = self.perform_action(chosen_action)
                 
                 # Se a ação foi bem-sucedida, reseta o contador de falhas.
-                self.failed_choices_count = 0
                 
                 # LOG DA JOGADA: Exibir dados estruturados em JSON
                 choice_index = None
@@ -537,10 +536,8 @@ class Agent:
                     if choice == chosen_action:
                         choice_index = i
                         break
-                self._log_turn_summary(chosen_action, choice_index or 1, outcome)
-                self.cockpit.render_game_screen()
-                print(f"Agente escolheu: {chosen_action}")
-                
+                self._log_turn_summary(chosen_action, choice_index, outcome)
+
                 # PAUSA MANUAL: Aguardar ENTER para continuar (todos os modos)
                 try:
                     input("Pressione ENTER para continuar...")
@@ -550,11 +547,7 @@ class Agent:
                 
             except Exception as e:
                 print(f"🚨 ERRO DE EXECUÇÃO: A ação falhou. {e}")
-                self.failed_choices_count += 1
-                outcome = f"Erro de Execução: {e}"
-                if self.failed_choices_count >= self.max_choice_retries:
-                    print("🚨 CIRCUIT BREAKER ATIVADO DEVIDO A ERRO DE EXECUÇÃO - Encerrando.")
-                    break
+                break
             
             # 5. Record - Registrar escolha no histórico detalhado
             choice_index = None
@@ -566,10 +559,11 @@ class Agent:
             self._record_choice_in_history(page_text, chosen_action, choice_index, outcome)
             
             # Navegação para a próxima página
-            self.current_page = next_page
+            self.cockpit.set_current_page(next_page)        
+
 
             # Condição de parada
-            if self.current_page == 0:
+            if self.cockpit.current_page_number == 0:
                 print("Fim da história (goto: 0).")
                 break
 
@@ -577,16 +571,13 @@ class Agent:
         """
         Observa o ambiente usando Cockpit para visualização rica.
         Exibe a nova "tela de video-game" de forma limpa.
-        """
-        # Configurar a página atual no Cockpit
-        self.cockpit.set_current_page(self.current_page)
-        
-        # Renderizar a tela de video-game (sem prints extras)
-        self.cockpit.render_game_screen()
-        
+        """        
         # Obter dados da página atual
-        page_data = self.game_data.get(self.current_page, {})
-        page_text = page_data.get("text", "Página não encontrada.")
+        page_data = self.game_data.get(self.cockpit.current_page_number, {})
+        if not page_data:
+            raise ValueError(f"Página {self.cockpit.current_page_number} não encontrada no repositório do jogo.")
+        page_text = page_data.get("text", "Nenhum texto disponível.")
+
         choices = page_data.get("choices", [])
         
         return page_text, choices
@@ -598,7 +589,7 @@ class Agent:
         """
         # Processamento interno silencioso
         # Futuramente, poderia usar um LLM para extrair contexto do page_text
-        pass
+        return
 
     def _record_choice_in_history(self, page_text, chosen_choice, choice_index=None, outcome=None):
         """
@@ -616,15 +607,15 @@ class Agent:
             choice_with_outcome['executed_outcome'] = outcome
         
         # Adicionar ao histórico detalhado via Character
-        self.character.add_to_history(
-            page_number=self.current_page,
+        self.cockpit.character.add_to_history(
+            page_number=self.cockpit.current_page_number,
             page_text=self._smart_truncate_text(page_text, 200),
             choice_made=choice_with_outcome,
             choice_index=choice_index
         )
         
         print("✅ ESCOLHA REGISTRADA NO HISTÓRICO DETALHADO")
-        print(f"  Página: {self.current_page}")
+        print(f"  Página: {self.cockpit.current_page_number}")
         print(f"  Escolha: {chosen_choice.get('text', str(chosen_choice)[:50])}")
         if outcome:
             print(f"  Resultado: {outcome[:100]}...")
@@ -645,15 +636,16 @@ class Agent:
         
         # Estruturar dados da jogada (foco no código da choice)
         turn_data = {
-            "page": self.current_page,
+            "page": self.cockpit.current_page_number,
             "choice_selected": {
                 "index": choice_index,
                 "choice_data": chosen_choice  # Código completo da choice
             },
             "execution_result": outcome if outcome else "Executada com sucesso"
         }
-        
-        # Exibir log estruturado de forma mais limpa
-        print("\n📋 LOG DA JOGADA:")
-        print(json.dumps(turn_data, indent=2, ensure_ascii=False))
-        print("")  # Linha em branco para separação
+
+        if self._debug_mode:
+            # Exibir log estruturado de forma mais limpa
+            print("\n📋 LOG DA JOGADA:")
+            print(json.dumps(turn_data, indent=2, ensure_ascii=False))
+            print("")  # Linha em branco para separação

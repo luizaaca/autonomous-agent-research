@@ -11,7 +11,7 @@ operações relacionadas ao personagem.
 """
 
 import random
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 
 
 class Character:
@@ -35,27 +35,6 @@ class Character:
             backstory: História de fundo do personagem
         """
         self._sheet = self._create_base_sheet()
-        self.setup(name, occupation, age, backstory)
-
-    def _initialize_random_stats(self):
-        """
-        Inicializa os atributos e recursos do personagem com valores aleatórios
-        baseado nas regras de "The Domestic" (3d6 * 5).
-        """
-        # Características: 3d6 * 5
-        for char in self.sheet["characteristics"]:
-            roll = sum(random.randint(1, 6) for _ in range(3)) * 5
-            self.set_characteristic(char, roll)
-
-        # Sorte: (2d6 + 6) * 5
-        luck_roll = (sum(random.randint(1, 6) for _ in range(2)) + 6) * 5
-        self.sheet["resources"]["luck"]["starting"] = luck_roll
-        self.sheet["resources"]["luck"]["current"] = luck_roll
-
-        # Pontos de Magia: POW / 5
-        pow_value = self.sheet["characteristics"]["POW"]["full"]
-        magic_points = pow_value // 5
-        self.set_magic_points(magic_points)
 
     def set_occupation(self, occupation: str):
         """
@@ -63,20 +42,23 @@ class Character:
         correspondentes.
         """
         self.sheet["info"]["occupation"] = occupation
+        print(f"Setting occupation to {occupation}")
 
         if occupation == "Police Officer":
+            self.sheet["info"]["name"] = "Officer John Doe"
             self.set_characteristic("STR", 65)
             self.set_characteristic("CON", 60)
             self.set_characteristic("DEX", 55)
             self.set_characteristic("INT", 55)
             self.set_characteristic("POW", 60)
-            self.set_skill("Athletics", 60, "common")
+            self.set_skill("Athletics", 65, "common")
             self.set_skill("Drive", 60, "common")
-            self.set_skill("Social", 60, "common")
-            self.set_skill("Fighting", 60, "combat")
-            self.set_skill("Firearms", 60, "combat")
-            self.set_skill("Law", 60, "expert")
+            self.set_skill("Social", 65, "common")
+            self.set_skill("Fighting", 65, "combat")
+            self.set_skill("Firearms", 65, "combat")
+            self.set_skill("Law", 70, "expert")
         elif occupation == "Social Worker":
+            self.sheet["info"]["name"] = "Social Worker Jane Smith"
             self.set_characteristic("STR", 50)
             self.set_characteristic("CON", 55)
             self.set_characteristic("DEX", 50)
@@ -86,6 +68,7 @@ class Character:
             self.set_skill("Research", 60, "common")
             self.set_skill("Social", 70, "common")
         elif occupation == "Nurse":
+            self.sheet["info"]["name"] = "Nurse Emily Davis"
             self.set_characteristic("STR", 50)
             self.set_characteristic("CON", 60)
             self.set_characteristic("DEX", 60)
@@ -96,12 +79,21 @@ class Character:
             self.set_skill("Social", 60, "common")
             self.set_skill("Medicine", 70, "expert")
         
-        # Ajustar magic points baseado no POW real da ocupação
-        actual_pow = self.sheet["characteristics"]["POW"]["full"]
-        self.set_magic_points(actual_pow // 5)
+        self.set_magic_points(random.randint(1, 10) + random.randint(1, 10) +50)        
+
+        self.init_luck()
         
         print(f"Occupation set to {occupation}. Stats and skills updated.")
     
+    def init_luck(self) -> None:
+        """
+        Inicializa a sorte do personagem com base na regra: 50 + 2d10.
+        """
+        luck_roll = random.randint(1, 10) + random.randint(1, 10)
+        starting_luck = 50 + luck_roll
+        self._sheet["resources"]["luck"]["starting"] = starting_luck
+        self._sheet["resources"]["luck"]["current"] = starting_luck
+
     def _create_base_sheet(self) -> Dict[str, Any]:
         """
         Cria a estrutura base da ficha de personagem.
@@ -118,7 +110,6 @@ class Character:
             },
             "contacts": {},
             "case_files": [],
-            "magic": {"spells": [], "signare": []},
             "characteristics": {
                 "STR": {"full": 0, "half": 0}, 
                 "CON": {"full": 0, "half": 0},
@@ -132,20 +123,8 @@ class Character:
                 "mov": 8
             },
             "skills": {
-                "common": {
-                    "Athletics": {"full": 30, "half": 15}, 
-                    "Drive": {"full": 30, "half": 15},
-                    "Navigate": {"full": 30, "half": 15}, 
-                    "Observation": {"full": 30, "half": 15},
-                    "Read Person": {"full": 30, "half": 15}, 
-                    "Research": {"full": 30, "half": 15},
-                    "Social": {"full": 30, "half": 15}, 
-                    "Stealth": {"full": 30, "half": 15},
-                },
-                "combat": {
-                    "Fighting": {"full": 30, "half": 15}, 
-                    "Firearms": {"full": 30, "half": 15}
-                },
+                "common": {},
+                "combat": {},
                 "expert": {}
             },
             "status": {
@@ -156,31 +135,7 @@ class Character:
             "inventory": {"equipment": [], "weapons": []},
             "page_history": []
         }
-    
-    def setup(self, name: str, occupation: Optional[str], age: int = 30, backstory: str = ""):
-        """
-        Configura o estado inicial do personagem, incluindo atributos aleatórios
-        e habilidades base. A ocupação define os bônus específicos.
-        """
-        # Configurações básicas de informação
-        self.sheet["info"]["name"] = name
-        self.sheet["info"]["age"] = age
-        self.sheet["info"]["backstory"] = backstory
-        
-        # 1. Inicializa atributos com valores aleatórios
-        self._initialize_random_stats()
-        
-        # 2. Garante que a habilidade Mágica SEMPRE seja inicializada
-        self.set_skill("Magic", 50, "expert")
-        
-        # 3. Se uma ocupação inicial for fornecida, aplica seus bônus
-        if occupation:
-            self.set_occupation(occupation)
-        
-        print(f"Character {name} (Occupation: {occupation or 'None'}) initialized.")
-        print(f"Luck: {self.sheet['resources']['luck']['current']}")
-        print(f"Magic Points: {self.sheet['resources']['magic_pts']['current']}")
-        return True
+
     
     # Propriedades para acesso fácil aos dados principais
     @property
@@ -1602,7 +1557,7 @@ class Character:
         """Limpa o histórico de decisões."""
         self._sheet['page_history'] = []
     
-    def get_all_skills(self) -> Dict[str, Dict[str, int]]:
+    def get_all_skills(self) -> Dict[str,int]:
         """
         Retorna todas as habilidades do personagem, independentemente do tipo.
         
@@ -1620,140 +1575,6 @@ class Character:
             if skill_type in self._sheet["skills"]:
                 # Copiar habilidades do tipo atual para o dicionário geral
                 all_skills.update(self._sheet["skills"][skill_type].copy())
-        
+
         return all_skills
 
-
-# Função de compatibilidade com código existente
-def create_character_sheet():
-    """
-    Função de compatibilidade que cria uma ficha base.
-    
-    DEPRECATED: Use Character() diretamente.
-    
-    Returns:
-        Dicionário com estrutura de ficha de personagem
-    """
-    temp_char = Character()
-    return temp_char.sheet
-
-
-# Função de compatibilidade com código existente
-def setup_character(sheet, name, occupation, backstory):
-    """
-    Função de compatibilidade para setup de personagem.
-    
-    DEPRECATED: Use Character(name, occupation, backstory) diretamente.
-    
-    Args:
-        sheet: Ficha de personagem (será modificada in-place)
-        name: Nome do personagem
-        occupation: Ocupação
-        backstory: História de fundo
-        
-    Returns:
-        Ficha modificada
-    """
-    # Criar Character temporário para aplicar setup
-    temp_char = Character(name, occupation, 30, backstory)
-    
-    # Copiar dados para a sheet existente
-    sheet.update(temp_char.sheet)
-    return sheet
-
-
-# Exemplo de uso e teste
-if __name__ == "__main__":
-    print("=== TESTE DA CLASSE CHARACTER ===\n")
-    
-    # Criar personagem policial
-    detective = Character("Detective Smith", "Police Officer", 35, 
-                         "Um veterano da força policial especializado em casos paranormais.")
-    
-    print("1. Personagem criado:")
-    print(detective)
-    print()
-    
-    # Testar acesso às características
-    print("2. Características:")
-    for char_name in ["STR", "DEX", "INT", "POW"]:
-        char_data = detective.get_characteristic(char_name)
-        print(f"   {char_name}: {char_data['full']} (Half: {char_data['half']})")
-    print()
-    
-    # Testar acesso às habilidades
-    print("3. Algumas habilidades:")
-    skills_to_test = [
-        ("Social", "common"),
-        ("Observation", "common"), 
-        ("Fighting", "combat")
-    ]
-    for skill, skill_type in skills_to_test:
-        try:
-            skill_data = detective.get_skill(skill, skill_type)
-            print(f"   {skill}: {skill_data['full']}% (Half: {skill_data['half']}%)")
-        except KeyError:
-            print(f"   {skill}: Não encontrada em {skill_type} skills")
-    print()
-    
-    # Testar habilidades expert
-    print("4. Habilidades Expert:")
-    for expert_skill, skill_data in detective.sheet["skills"]["expert"].items():
-        print(f"   {expert_skill}: {skill_data['full']}% (Half: {skill_data['half']}%)")
-    print()
-    
-    # Testar sistema de recursos
-    print("5. Sistema de Recursos:")
-    luck = detective.get_luck()
-    magic = detective.get_magic_points()
-    print(f"   Luck inicial: {luck['current']}/{luck['starting']}")
-    print(f"   Magic inicial: {magic['current']}/{magic['starting']}")
-    
-    # Definir pontos de magia para o teste
-    detective.set_magic_points(10)
-    magic_after = detective.get_magic_points()
-    print(f"   Magic após set_magic_points(10): {magic_after['current']}/{magic_after['starting']}")
-    
-    # Testar gastos de recursos
-    print(f"   Pode gastar 3 luck? {detective.can_spend_luck(3)}")
-    print(f"   Pode gastar 50 luck? {detective.can_spend_luck(50)}")
-    
-    if detective.spend_luck(5):
-        luck_after = detective.get_luck()
-        print(f"   Após gastar 5 luck: {luck_after['current']}/{luck_after['starting']}")
-    
-    if detective.spend_magic(3):
-        magic_after = detective.get_magic_points()
-        print(f"   Após gastar 3 magic: {magic_after['current']}/{magic_after['starting']}")
-    
-    # Testar restauração
-    detective.restore_luck(2)
-    detective.restore_magic(1)
-    luck_restored = detective.get_luck()
-    magic_restored = detective.get_magic_points()
-    print(f"   Após restaurar (2 luck, 1 magic): Luck {luck_restored['current']}, Magic {magic_restored['current']}")
-    print()
-    
-    # Testar modificação de características e habilidades
-    print("6. Modificação de valores:")
-    original_str = detective.get_characteristic("STR")
-    print(f"   STR original: {original_str['full']}")
-    
-    detective.set_characteristic("STR", 75)
-    new_str = detective.get_characteristic("STR")
-    print(f"   STR após set_characteristic(75): {new_str['full']} (Half: {new_str['half']})")
-    
-    detective.set_skill("Athletics", 80, "common")
-    athletics = detective.get_skill("Athletics", "common")
-    print(f"   Athletics após set_skill(80): {athletics['full']}% (Half: {athletics['half']}%)")
-    print()
-    
-    # Testar compatibilidade com funções antigas
-    print("7. Teste de compatibilidade:")
-    old_sheet = create_character_sheet()
-    old_sheet = setup_character(old_sheet, "Agent Test", "Nurse", "Enfermeiro experiente")
-    print(f"   Nome via função antiga: {old_sheet['info']['name']}")
-    print(f"   Ocupação via função antiga: {old_sheet['info']['occupation']}")
-    print()
-    
-    print("=== TESTE CONCLUÍDO ===")

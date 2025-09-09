@@ -10,14 +10,9 @@ A estrutura é dividida em:
 - Body: Estado atual do personagem (ficha, status, inventário, histórico)
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 import json
 from character import Character
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table, Column
-from rich.text import Text
-from rich.columns import Columns
 
 
 class Cockpit:
@@ -41,8 +36,6 @@ class Cockpit:
         self.pages_data = pages_data
         self.current_page_number = None
         self.current_page_data = None
-        self.console = Console()
-        self._cached_status_data = None
         
     def set_current_page(self, page_number: int):
         """Define a página atual do jogo."""
@@ -55,342 +48,8 @@ class Cockpit:
             # Fallback para dicionários diretos
             self.current_page_data = self.pages_data.get(page_number, {})
     
-    def force_refresh(self):
-        """
-        Força a atualização dos dados do personagem na próxima renderização.
-        Este método deve ser chamado sempre que o estado do personagem for alterado
-        externamente (ex: após aplicar efeitos como 'set-occupation').
-        """
-        # Invalidar os dados de status para forçar a coleta na próxima renderização
-        self._cached_status_data = None
     
-    def render_game_screen(self) -> None:
-        """
-        Renderiza e exibe a tela de jogo completa, incluindo status, histórico,
-        situação atual e escolhas.
-        
-        Este é o método principal que centraliza toda a UI do jogo.
-        """
-        # 1. Limpar console
-        self.console.clear()
-
-        # 2. Obter dados do personagem
-        status_data = self._get_character_status_data()
-        
-        # 3. Construir painéis de status
-        info_panel = self._build_info_table(status_data)
-        resources_panel = self._build_resources_table(status_data)
-        attributes_panel = self._build_attributes_table(status_data)
-        skills_panel = self._build_skills_table(status_data)
-        
-        status_layout = Columns([
-            info_panel,
-            resources_panel,
-            attributes_panel,
-            skills_panel
-        ], equal=True)
-
-        # 4. Construir painel de histórico
-        history_panel = self._build_history_panel()
-
-        # 5. Construir painel da situação atual
-        page_text = self.current_page_data.get('text', 'Página não encontrada.')
-        page_panel = Panel(
-            Text(page_text, style="white"),
-            title="SITUAÇÃO ATUAL",
-            border_style="cyan"
-        )
-        
-        # 6. Construir painel de escolhas
-        choices = self.current_page_data.get('choices', [])
-        choices_panel = self._build_choices_panel(choices)
-        
-        # 7. Montar layout principal em um grid
-        main_grid = Table.grid(padding=(1, 0), expand=True)
-        main_grid.add_column()
-        main_grid.add_row(status_layout)
-        if history_panel:
-            main_grid.add_row("")
-            main_grid.add_row(history_panel)
-        main_grid.add_row("")
-        main_grid.add_row(page_panel)
-        main_grid.add_row("")
-        main_grid.add_row(choices_panel)
-        
-        main_panel = Panel(
-            main_grid,
-            title=f"🎮 COCKPIT - PÁGINA {self.current_page_number}",
-            border_style="bold blue",
-            expand=False
-        )
-        
-        # 8. Renderizar na tela
-        self.console.print(main_panel)
-        
-        # DEBUG: Exibir atributos do objeto Character abaixo do cockpit
-        debug_data = {
-            "name": self.character.name,
-            "occupation": self.character.occupation,
-            "age": self.character.age,
-            "health": self.character.get_health_status(),
-            "luck": self.character.get_luck(),
-            "magic": self.character.get_magic_points(),
-            "characteristics": {k: self.character.get_characteristic(k) for k in ["STR", "CON", "DEX", "INT", "POW"]},
-            "skills": self.character.get_all_skills(),
-            "inventory": self.character.get_inventory(),
-            "modifiers": self.character.get_modifiers(),
-            "history": self.character.get_history()[-3:]  # últimas 3 decisões
-        }
-        debug_json = json.dumps(debug_data, indent=2, ensure_ascii=False)
-        self.console.print(Panel(Text(debug_json, style="dim"), title="DEBUG: Character State", border_style="red"))
     
-    def _get_character_status_data(self) -> Dict[str, Any]:
-        """
-        Coleta e estrutura os dados do personagem para renderização.
-        Utiliza um cache para evitar recálculos desnecessários, a menos que force_refresh seja chamado.
-        """
-        # Se os dados já estiverem em cache, retorná-los
-        if self._cached_status_data is not None:
-            return self._cached_status_data
-            
-        # Status de saúde
-        health_status = self.character.get_health_status()
-        current_health = health_status["current_level"]
-        damage_taken = health_status["damage_taken"]
-        
-        health_icons = {
-            "Healthy": "💚", "Hurt": "💛", "Bloodied": "🧡",
-            "Down": "❤️", "Impaired": "💜"
-        }
-        
-        # Recursos
-        luck_data = self.character.get_luck()
-        magic_data = self.character.get_magic_points()
-        
-        # Características
-        characteristics = {}
-        char_names = ["STR", "CON", "DEX", "INT", "POW"]
-        for char_name in char_names:
-            try:
-                char_data = self.character.get_characteristic(char_name)
-                characteristics[char_name] = char_data
-            except KeyError:
-                continue
-        
-        # Habilidades - NOTA: Idealmente, a classe Character deveria fornecer um método get_all_skills()
-        skills = {
-            "common": {},
-            "combat": {},
-            "expert": {}
-        }
-        all_character_skills = self.character.get_all_skills()
-        for category, skill_list in all_character_skills.items():
-            if category in skills:
-                skills[category] = skill_list
-
-        self._cached_status_data = {
-            "info": {
-                "name": self.character.name,
-                "occupation": self.character.occupation or "N/A",
-                "age": self.character.age
-            },
-            "health": {
-                "icon": health_icons.get(current_health, '❓'),
-                "level": current_health,
-                "damage": damage_taken,
-            },
-            "resources": {
-                "luck": f"{luck_data['current']}/{luck_data['starting']}",
-                "magic": f"{magic_data['current']}/{magic_data['starting']}",
-            },
-            "characteristics": characteristics,
-            "skills": skills
-        }
-        
-        return self._cached_status_data
-    
-    def _build_info_table(self, status_data: Dict[str, Any]) -> Panel:
-        """Cria a tabela de informações básicas e saúde."""
-        table = Table.grid(padding=(0, 1))
-        table.add_column(style="bold cyan", justify="left")
-        table.add_column(justify="left")
-        
-        info = status_data["info"]
-        health = status_data["health"]
-        
-        table.add_row("NOME:", info["name"])
-        table.add_row("OCUPAÇÃO:", info["occupation"])
-        table.add_row("IDADE:", str(info["age"]))
-        table.add_row("SAÚDE:", f"{health['icon']} {health['level']} (Dano: {health['damage']})")
-        
-        return Panel(table, title="📋 PERSONAGEM", border_style="green")
-    
-    def _build_resources_table(self, status_data: Dict[str, Any]) -> Panel:
-        """Cria a tabela de recursos (Sorte, Magia)."""
-        table = Table.grid(padding=(0, 1))
-        table.add_column(style="bold yellow", justify="left")
-        table.add_column(justify="left")
-        
-        resources = status_data["resources"]
-        
-        table.add_row("SORTE:", resources["luck"])
-        table.add_row("MAGIA:", resources["magic"])
-        
-        return Panel(table, title="⚡ RECURSOS", border_style="yellow")
-
-    def _build_attributes_table(self, status_data: Dict[str, Any]) -> Panel:
-        """Cria a tabela de atributos (características)."""
-        table = Table.grid(padding=(0, 1))
-        table.add_column(style="bold red", justify="left")
-        table.add_column(justify="left")
-        
-        characteristics = status_data.get("characteristics", {})
-        
-        if not characteristics:
-            table.add_row("N/A", "")
-        else:
-            for name, values in characteristics.items():
-                table.add_row(f"{name}:", str(values.get('full', '')))
-            
-        return Panel(table, title="📊 ATRIBUTOS", border_style="red")
-
-    def _build_skills_table(self, status_data: Dict[str, Any]) -> Panel:
-        """Cria a tabela de habilidades."""
-        table = Table.grid(padding=(0, 1))
-        table.add_column(style="bold blue", justify="left")
-        table.add_column(justify="left")
-        
-        skills = status_data.get("skills", {})
-        all_skills = {
-            **skills.get("common", {}),
-            **skills.get("combat", {}),
-            **skills.get("expert", {})
-        }
-        
-        if not all_skills:
-            table.add_row("Nenhuma", "")
-        else:
-            for name, values in sorted(all_skills.items()):
-                table.add_row(f"{name}:", f"{values.get('full', 0)}%")
-            
-        return Panel(table, title="🎯 HABILIDADES", border_style="blue")
-
-    def _build_history_panel(self) -> Optional[Panel]:
-        """
-        Cria um painel com o histórico das últimas decisões do jogador.
-        Retorna None se não houver histórico.
-        """
-        history = self.character.get_history()
-        if not history:
-            return None
-
-        content = Text()
-        # Mostrar últimas 5 jogadas
-        recent_history = history[-5:]
-        
-        for entry in recent_history:
-            if isinstance(entry, dict):
-                page_num = entry.get('page_number', 0)
-                choice_made = entry.get('choice_made', {})
-                
-                choice_text = choice_made.get('text', '')
-                # Se não houver texto, formata a ação para dar contexto
-                if not choice_text:
-                    choice_text = self._format_choice_text(choice_made)
-                else:
-                    choice_text = f'"{choice_text}"'
-
-                # Construir string de resultado detalhado
-                result_parts = []
-                if 'roll_result' in choice_made:
-                    success_str = "SUCESSO" if choice_made.get('success') else "FALHA"
-                    skill = choice_made.get('skill_used', 'N/A')
-                    roll = choice_made.get('roll_result', 'N/A')
-                    target = choice_made.get('target_value', 'N/A')
-                    result_parts.append(f"Rolagem de {skill}: {roll} vs {target} -> {success_str}")
-
-                if 'effects_applied' in choice_made and choice_made['effects_applied']:
-                    effects_str_parts = []
-                    for eff in choice_made['effects_applied']:
-                        action = eff.get('action', 'unknown')
-                        param = eff.get('amount') or eff.get('skill') or ''
-                        effects_str_parts.append(f"{action}({param})")
-                    result_parts.append(f"Efeitos: {', '.join(effects_str_parts)}")
-
-                if 'goto_executed' in choice_made:
-                    result_parts.append(f"goto: {choice_made['goto_executed']}")
-                
-                result_info = ""
-                if result_parts:
-                    result_info = f" -> Resultado: {'; '.join(result_parts)}"
-
-                history_line = f"Página {page_num}: Escolheu {choice_text}{result_info}\n"
-                content.append(history_line, style="dim white")
-        
-        return Panel(content, title="📜 HISTÓRICO DE DECISÕES", border_style="yellow")
-
-    def _format_choice_text(self, choice: Dict[str, Any]) -> str:
-        """
-        Formata o dicionário de uma escolha em um texto descritivo e legível.
-        """
-        # Se a escolha tiver um texto explícito, use-o como base
-        text = choice.get('text', '')
-
-        details = []
-        # Adiciona detalhes sobre as ações da escolha
-        if 'goto' in choice:
-            details.append(f"goto: {choice['goto']}")
-        if 'set-occupation' in choice:
-            details.append(f"set-occupation: '{choice['set-occupation']}'")
-        if 'roll' in choice:
-            details.append(f"roll: {choice['roll']}")
-        if 'luck_roll' in choice:
-            details.append("roll: luck")
-        if 'opposed_roll' in choice:
-            details.append(f"opposed_roll: {choice['opposed_roll']}")
-        if 'effects' in choice:
-            effects_desc = []
-            for effect in choice['effects']:
-                action = effect.get('action', 'unknown_action')
-                if action == 'take_damage':
-                    effects_desc.append(f"damage: {effect.get('amount', '?')}")
-                elif action == 'gain_skill':
-                    effects_desc.append(f"gain_skill: {effect.get('skill', '?')}")
-                elif action == 'spend_magic':
-                    effects_desc.append(f"spend_magic: {effect.get('amount', '?')}")
-                else:
-                    effects_desc.append(action)
-            details.append(f"effects: {', '.join(effects_desc)}")
-
-        # Monta a string final
-        if details:
-            details_str = f"({', '.join(details)})"
-            return f"{text} {details_str}" if text else details_str
-        
-        return text or "Ação sem descrição"
-    
-    def _build_choices_panel(self, choices: List[Dict[str, Any]]) -> Panel:
-        """
-        Cria o painel que exibe apenas as escolhas atualmente disponíveis para o jogador.
-        A lógica de histórico foi movida para _build_history_panel.
-        """
-        content = Text()
-        
-        if not choices:
-            content.append("🏁 FIM DO JOGO - Nenhuma escolha disponível.", style="bold red")
-        else:
-            content.append("ESCOLHAS ATUAIS:\n", style="bold cyan")
-            for i, choice in enumerate(choices, 1):
-                # Formata a escolha de forma detalhada
-                formatted_text = self._format_choice_text(choice)
-                
-                # Adicionar prefixo [SYSTEM] ou [ERROR] se for mensagem de sistema
-                if formatted_text.startswith('[SYSTEM]') or formatted_text.startswith('[ERROR]'):
-                    content.append(f"  {formatted_text}\n", style="bold red")
-                else:
-                    content.append(f"[{i}] - {formatted_text}\n", style="white")
-        
-        return Panel(content, title="🎯 ESCOLHAS DISPONÍVEIS", border_style="magenta")
     
     def _smart_truncate_text(self, text: str, max_chars: int = 50) -> str:
         """
@@ -467,6 +126,7 @@ INSTRUCTIONS:
         
         # Recursos usando métodos da Character
         luck_data = self.character.get_luck()
+        print(f"Luck data: {luck_data}")
         magic_data = self.character.get_magic_points()
         
         # Características principais usando métodos da Character
@@ -483,34 +143,7 @@ INSTRUCTIONS:
                 continue
         
         # Habilidades organizadas por categoria
-        skills = {
-            "common": {},
-            "combat": {}
-        }
-        
-        # Habilidades comuns
-        common_skill_names = ["Athletics", "Drive", "Navigate", "Observation", "Read Person", "Research"]
-        for skill_name in common_skill_names:
-            try:
-                skill_data = self.character.get_skill(skill_name, "common")
-                skills["common"][skill_name] = {
-                    "full": skill_data['full'],
-                    "half": skill_data['half']
-                }
-            except KeyError:
-                continue
-        
-        # Habilidades de combate
-        combat_skill_names = ["Fighting", "Firearms"]
-        for skill_name in combat_skill_names:
-            try:
-                skill_data = self.character.get_skill(skill_name, "combat")
-                skills["combat"][skill_name] = {
-                    "full": skill_data['full'],
-                    "half": skill_data['half']
-                }
-            except KeyError:
-                continue
+        skills = self.character.get_all_skills()
         
         # Inventário usando métodos da Character
         inventory = self.character.get_inventory()
@@ -538,8 +171,7 @@ INSTRUCTIONS:
                 "magic": {
                     "current": magic_data['current'],
                     "starting": magic_data['starting']
-                },
-                "movement": 8
+                }
             },
             "characteristics": characteristics,
             "skills": skills,
@@ -803,54 +435,5 @@ INSTRUCTIONS:
         ]
         
         return "\n".join(sections)
-    
-    def update_character_from_effects(self, effects: List[Dict[str, Any]]):
-        """
-        Aplica efeitos à ficha do personagem usando os métodos da classe Character.
-        
-        Args:
-            effects: Lista de efeitos a aplicar
-        """
-        result = self.character.apply_effects(effects)
-        return result
-    
-    def get_choice_summary(self) -> str:
-        """
-        Retorna um resumo das escolhas disponíveis para debug.
-        
-        Returns:
-            String com resumo das escolhas
-        """
-        if not self.current_page_data:
-            return "No current page data"
-            
-        choices = self.current_page_data.get('choices', [])
-        if not choices:
-            return "No choices available (end state)"
-            
-        summary = f"Page {self.current_page_number} has {len(choices)} choices:\n"
-        for i, choice in enumerate(choices, 1):
-            if isinstance(choice, dict):
-                # Exibir o objeto choice completo para debug
-                summary += f"  [{i}] {choice}\n"
-            else:
-                summary += f"  [{i}] {choice}\n"
-                
-        return summary.strip()
 
 
-# Exemplo de uso
-if __name__ == "__main__":
-    # Demonstração básica da classe GamePage
-    from pages import PAGES
-    
-    # Criar personagem usando a classe Character
-    character = Character()
-    character.setup("Detective Smith", "Police Officer", 35, "Experienced detective")
-    
-    # Criar cockpit do jogo
-    cockpit = Cockpit(character, PAGES)
-    cockpit.set_current_page(1)
-    
-    # Renderizar a tela do jogo
-    cockpit.render_game_screen()

@@ -11,4 +11,4 @@ Descrição: Desenvolver um agente autônomo que utiliza o ciclo OODA (Observar,
 **Compreensão do Contexto**: Familiarize-se com o ciclo OODA e como ele se aplica a jogos de aventura baseados em texto. Entenda os componentes principais: Observação, Orientação, Decisão e Ação.
 **Estrutura do Código**: Mantenha uma estrutura de código clara e modular. Separe as funções para cada etapa do ciclo OODA. Use classes e métodos para encapsular funcionalidades relacionadas.
 **Clareza e Manutenção**: Escreva código claro e bem documentado. Use nomes de variáveis e funções descritivos. Adicione comentários explicativos onde necessário.
-**Documentação**: Documente em `automatica_gaming_agent.md` todas as decisões de design, mudanças de código e a lógica por trás das implementações. Use docstrings para funções e classes.
+**Documentação**: Documente em `automatica_gaming_agent.md` todas as decisões de design, mudanças de código e a lógica por trás das implementações. Use docstrings para funções e classes. Pode criar versoes novas do arquivo com a versão no nome para manter o historico.
