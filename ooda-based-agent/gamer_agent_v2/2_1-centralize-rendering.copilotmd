@@ -1,0 +1,356 @@
+
+# task-2_1-centralize-rendering.copilotmd
+
+# Tarefa 2.1: Centralizar Lógica de Renderização
+
+## Contexto
+Atualmente, a lógica de renderização está espalhada entre `Cockpit.py` e `player_adapters.py`, violando os princípios DRY e de Responsabilidade Única. A análise arquitetural identificou esta como uma "FALHA ARQUITETURAL 3: Violação de Responsabilidade na Camada de Adapters/View" com impacto MÉDIO, pois torna a manutenção da UI repetitiva e propensa a erros.
+
+## Objetivo
+Tornar o `Cockpit` a única fonte da verdade para toda a renderização, centralizando a lógica de apresentação e simplificando os `PlayerAdapters`.
+
+## Instruções Passo a Passo
+
+### 1. Definir Interface de Renderização
+Atualize `gamer_agent/cockpit.py` para incluir métodos específicos de renderização:
+
+```python
+from abc import ABC, abstractmethod
+from rich.panel import Panel
+from rich.table import Table
+from typing import Dict, Any, Protocol
+
+class GameStateDTO:
+    """DTO para transferência de estado do jogo"""
+    def __init__(self, character_state: Dict, current_page: Dict, valid_choices: list):
+        self.character_state = character_state
+        self.current_page = current_page
+        self.valid_choices = valid_choices
+
+class IRenderer(Protocol):
+    """Interface para estratégias de renderização"""
+    def render(self, game_state: GameStateDTO) -> Any:
+        ...
+```
+
+### 2. Implementar Renderizadores Específicos
+Crie `gamer_agent/renderers.py`:
+```python
+from rich.panel import Panel
+from rich.table import Table
+from .cockpit import GameStateDTO
+
+class ConsoleRenderer:
+    """Renderiza o estado do jogo para interface console com rich"""
+    
+    def render(self, game_state: GameStateDTO) -> Panel:
+        # Painel principal
+        main_panel = Panel(
+            f"[bold]{game_state.current_page['title']}[/bold]\n\n"
+            f"{game_state.current_page['content']}",
+            title="Aventura",
+            border_style="blue"
+        )
+        
+        # Tabela de status
+        status_table = Table(show_header=True, header_style="bold magenta")
+        status_table.add_column("Atributo", style="dim")
+        status_table.add_column("Valor")
+        
+        for attr, value in game_state.character_state.items():
+            if attr in ['health', 'stamina', 'luck', 'magic']:
+                status_table.add_row(attr.capitalize(), str(value))
+        
+        # Painel de escolhas
+        choices_panel = Panel(
+            self._format_choices(game_state.valid_choices),
+            title="Escolhas",
+            border_style="green"
+        )
+        
+        # Combinar painéis
+        from rich.console import Console
+        from rich.columns import Columns
+        from rich import box
+        
+        console = Console()
+        with console.capture() as capture:
+            console.print(main_panel)
+            console.print(status_table)
+            console.print(choices_panel)
+        
+        return capture.get()
+
+    def _format_choices(self, choices: list) -> str:
+        """Formata as escolhas disponíveis"""
+        return "\n".join([f"{i+1}. {choice['text']}" for i, choice in enumerate(choices)])
+
+
+class LLMPromptRenderer:
+    """Renderiza o estado do jogo para prompt de LLM"""
+    
+    def render(self, game_state: GameStateDTO) -> str:
+        # Formato otimizado para LLM
+        prompt = f"""
+# JOGO DE AVENTURA
+## Estado Atual
+Título: {game_state.current_page['title']}
+Conteúdo: {game_state.current_page['content']}
+
+## Status do Personagem
+"""
+        for attr, value in game_state.character_state.items():
+            if attr in ['health', 'stamina', 'luck', 'magic']:
+                prompt += f"- {attr.capitalize()}: {value}\n"
+        
+        prompt += "\n## Escolhas Disponíveis\n"
+        for i, choice in enumerate(game_state.valid_choices):
+            prompt += f"{i+1}. {choice['text']}\n"
+        
+        prompt += "\n## Instruções\n"
+        prompt += "Escolha o número da ação que deseja executar (1, 2, ...). Responda apenas com o número.\n"
+        
+        return prompt.strip()
+```
+
+### 3. Refatorar Cockpit para Usar Renderizadores
+Atualize `gamer_agent/cockpit.py`:
+```python
+class Cockpit:
+    """Interface de visualização do jogo (View)"""
+    
+    def __init__(self, character, game_repository):
+        self.character = character
+        self.game_repository = game_repository
+    
+    def get_current_state(self) -> GameStateDTO:
+        """Obtém o estado atual do jogo como DTO"""
+        character_state = self.character.get_state()
+        current_page = self.game_repository.get_current_page()
+        valid_choices = self.game_repository.get_valid_choices(character_state)
+        
+        return GameStateDTO(
+            character_state=character_state,
+            current_page=current_page,
+            valid_choices=valid_choices
+        )
+```
+
+### 4. Simplificar PlayerAdapters
+Atualize `gamer_agent/player_adapters.py`:
+```python
+class HumanPlayerAdapter(PlayerInputAdapter):
+    """Adapter para jogador humano"""
+    
+    def __init__(self, renderer):
+        self.renderer = renderer
+    
+    def get_decision(self, game_state) -> int:
+        """Obtém decisão do jogador humano"""
+        # Renderiza usando o renderer injetado
+        render_output = self.renderer.render(game_state)
+        print(render_output)
+        
+        # Obtém escolha do usuário
+        while True:
+            try:
+                choice = int(input("\nSua escolha: "))
+                if 1 <= choice <= len(game_state.valid_choices):
+                    return choice - 1
+                print(f"Escolha inválida. Por favor, escolha entre 1 e {len(game_state.valid_choices)}")
+            except ValueError:
+                print("Por favor, insira um número válido.")
+
+
+class LLMPlayerAdapter(PlayerInputAdapter):
+    """Adapter para jogador IA (LLM)"""
+    
+    def __init__(self, renderer, llm_service):
+        self.renderer = renderer
+        self.llm_service = llm_service
+    
+    def get_decision(self, game_state) -> int:
+        """Obtém decisão da IA"""
+        prompt = self.renderer.render(game_state)
+        response = self.llm_service.generate_response(prompt)
+        return self._parse_llm_response(response, len(game_state.valid_choices))
+    
+    def _parse_llm_response(self, response: str, num_choices: int) -> int:
+        """Parseia resposta da LLM para obter índice de escolha"""
+        # Lógica de parsing robusta
+        try:
+            # Tenta extrair número da resposta
+            import re
+            numbers = re.findall(r'\d+', response)
+            if numbers:
+                choice = int(numbers[0]) - 1
+                if 0 <= choice < num_choices:
+                    return choice
+            
+            # Tenta encontrar texto de escolha
+            for i, choice_text in enumerate([c['text'] for c in game_state.valid_choices]):
+                if choice_text.lower() in response.lower():
+                    return i
+            
+            # Escolha padrão se não conseguir parsear
+            return 0
+        except:
+            return 0
+```
+
+### 5. Atualizar main.py para Injeção de Dependências
+```python
+def main():
+    # ...
+    
+    # Configurar renderizadores
+    if player_type == "human":
+        renderer = ConsoleRenderer()
+    elif player_type in ["llm", "gemini"]:
+        renderer = LLMPromptRenderer()
+        llm_service = GeminiService(api_key=api_key)
+        player_adapter = LLMPlayerAdapter(renderer, llm_service)
+    else:
+        renderer = ConsoleRenderer()
+    
+    # Configurar cockpit
+    cockpit = Cockpit(character, game_repository)
+    
+    # Configurar player adapter
+    if player_type == "human":
+        player_adapter = HumanPlayerAdapter(renderer)
+    elif player_type == "demo":
+        player_adapter = DemoPlayerAdapter()
+    
+    # Configurar agent
+    agent = Agent(cockpit, game_repository, character, player_adapter)
+    # ...
+```
+
+## Critérios de Aceitação
+- [ ] PlayerAdapters não contêm mais lógica de formatação
+- [ ] Nova arquitetura passa em todos os testes existentes
+- [ ] Adição de novos formatos de renderização não requer modificação do Cockpit
+- [ ] Código duplicado de renderização foi eliminado
+- [ ] Documentação clara dos renderizadores e suas responsabilidades
+- [ ] Sistema funciona corretamente com ambos os modos (humano e LLM)
+
+## Exemplo de Implementação Completa
+```python
+# gamer_agent/renderers.py
+from rich.panel import Panel
+from rich.table import Table
+from typing import List, Dict
+from .cockpit import GameStateDTO
+
+class ConsoleRenderer:
+    """Renderiza o estado do jogo para interface console com rich"""
+    
+    def render(self, game_state: GameStateDTO) -> str:
+        """Renderiza o estado completo para console"""
+        # Painel principal com conteúdo da página
+        main_panel = Panel(
+            f"[bold]{game_state.current_page['title']}[/bold]\n\n"
+            f"{game_state.current_page['content']}",
+            title="Aventura",
+            border_style="blue",
+            padding=(1, 2)
+        )
+        
+        # Tabela de status do personagem
+        status_table = Table(show_header=True, header_style="bold magenta")
+        status_table.add_column("Atributo", style="dim")
+        status_table.add_column("Valor")
+        
+        # Adiciona atributos relevantes
+        attributes = {
+            'health': 'Vida',
+            'stamina': 'Energia',
+            'luck': 'Sorte',
+            'magic': 'Magia'
+        }
+        
+        for attr_key, attr_name in attributes.items():
+            if attr_key in game_state.character_state:
+                value = game_state.character_state[attr_key]
+                status_table.add_row(attr_name, str(value))
+        
+        # Painel de escolhas
+        choices_text = []
+        for i, choice in enumerate(game_state.valid_choices):
+            choices_text.append(f"[green]{i+1}[/green]. {choice['text']}")
+        
+        choices_panel = Panel(
+            "\n".join(choices_text),
+            title="Escolhas Disponíveis",
+            border_style="green",
+            padding=(1, 2)
+        )
+        
+        # Combinar todos os elementos
+        from rich.console import Console
+        from rich import box
+        from rich.text import Text
+        
+        console = Console()
+        with console.capture() as capture:
+            console.print(main_panel)
+            console.print(status_table)
+            console.print(choices_panel)
+            console.print(Text("\nDigite o número da escolha desejada:", style="bold yellow"))
+        
+        return capture.get()
+
+
+class LLMPromptRenderer:
+    """Renderiza o estado do jogo para prompt de LLM"""
+    
+    def render(self, game_state: GameStateDTO) -> str:
+        """Renderiza o estado para prompt de LLM"""
+        # Cabeçalho do prompt
+        prompt = "### JOGO DE RPG DE TEXTOS\n"
+        prompt += "Você está jogando um jogo de RPG de textos. Sua tarefa é escolher a próxima ação.\n\n"
+        
+        # Estado atual
+        prompt += f"## {game_state.current_page['title']}\n"
+        prompt += f"{game_state.current_page['content']}\n\n"
+        
+        # Status do personagem
+        prompt += "## STATUS DO PERSONAGEM\n"
+        attributes = {
+            'health': 'Vida',
+            'stamina': 'Energia',
+            'luck': 'Sorte',
+            'magic': 'Magia'
+        }
+        
+        for attr_key, attr_name in attributes.items():
+            if attr_key in game_state.character_state:
+                prompt += f"- {attr_name}: {game_state.character_state[attr_key]}\n"
+        
+        # Escolhas disponíveis
+        prompt += "\n## ESCOLHAS DISPONÍVEIS\n"
+        for i, choice in enumerate(game_state.valid_choices):
+            prompt += f"{i+1}. {choice['text']}\n"
+        
+        # Instruções para a LLM
+        prompt += "\n## INSTRUÇÕES\n"
+        prompt += "Analise a situação e escolha a ação mais adequada. Responda APENAS com o número da escolha (1, 2, 3, etc.).\n"
+        prompt += "Não inclua explicações ou texto adicional. Apenas o número da escolha.\n"
+        
+        return prompt.strip()
+```
+
+## Armadilhas Comuns a Evitar
+- **Não misture lógica de apresentação com lógica de domínio**: O renderer deve apenas formatar dados
+- **Não faça os renderizadores conhecerem detalhes de implementação**: Mantenha-os agnósticos do modelo
+- **Não ignore a acessibilidade**: Considere como o conteúdo é apresentado para diferentes usuários
+- **Não esqueça de tratar casos extremos**: Como quando não há escolhas disponíveis
+- **Não repita lógica de formatação**: Extraia funções auxiliares para partes comuns
+- **Não faça os adapters conhecerem detalhes do renderer**: Mantenha a injeção limpa
+
+## Notas Adicionais
+Esta refatoração implementa o padrão Strategy para renderização, permitindo que novos formatos de apresentação sejam adicionados sem modificar o código existente (princípio Open/Closed). O Cockpit agora atua como uma fachada para o estado do jogo, enquanto os renderizadores implementam a lógica específica de apresentação. Esta separação clara de responsabilidades é fundamental para a manutenibilidade do sistema.
+
+---
+

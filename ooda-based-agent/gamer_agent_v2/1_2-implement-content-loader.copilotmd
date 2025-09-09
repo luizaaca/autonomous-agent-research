@@ -1,0 +1,242 @@
+# Tarefa 1.2: Implementar Content Loader
+
+## Contexto
+Após a criação do schema YAML para o conteúdo do jogo, precisamos implementar um mecanismo para carregar esse conteúdo no sistema. A análise arquitetural identificou que o acoplamento atual entre código e conteúdo é uma falha crítica que impede a colaboração efetiva entre programadores e criadores de conteúdo.
+
+## Objetivo
+Implementar um Content Loader robusto que carregue o conteúdo do jogo a partir dos arquivos YAML, permitindo que o GameRepository funcione com este novo formato sem alterações significativas na lógica do jogo.
+
+## Instruções Passo a Passo
+
+### 1. Criar Módulo de Loader
+```bash
+touch gamer_agent/content_loader.py
+```
+
+### 2. Implementar Classe ContentLoader Básica
+```python
+import os
+import yaml
+import json
+from jsonschema import validate, ValidationError
+from typing import Dict, Any
+
+class ContentLoader:
+    """Carrega e valida o conteúdo do jogo a partir de arquivos YAML"""
+    
+    def __init__(self, content_dir: str = "content/pages"):
+        self.content_dir = content_dir
+        self.schema = self._load_schema()
+    
+    def _load_schema(self) -> Dict:
+        """Carrega o schema de validação"""
+        schema_path = os.path.join(os.path.dirname(__file__), "../content/schema.json")
+        with open(schema_path) as f:
+            return json.load(f)
+    
+    def load_all_pages(self) -> Dict[int, Dict]:
+        """Carrega todas as páginas do diretório de conteúdo"""
+        pages = {}
+        for filename in os.listdir(self.content_dir):
+            if filename.endswith(".yaml"):
+                file_path = os.path.join(self.content_dir, filename)
+                page = self._load_page(file_path)
+                pages[page["id"]] = page
+        return pages
+    
+    def _load_page(self, file_path: str) -> Dict:
+        """Carrega e valida uma página específica"""
+        with open(file_path) as f:
+            page = yaml.safe_load(f)
+        
+        # Validação
+        try:
+            validate(instance=page, schema=self.schema)
+        except ValidationError as e:
+            raise ValueError(f"Erro ao validar {file_path}: {e.message}")
+        
+        return page
+```
+
+### 3. Modificar GameRepository para Usar ContentLoader
+Atualize `gamer_agent/game_repository.py`:
+```python
+from gamer_agent.content_loader import ContentLoader
+
+class GameRepository:
+    def __init__(self, content_dir: str = "content/pages"):
+        loader = ContentLoader(content_dir)
+        self.pages = loader.load_all_pages()
+        self.current_page_id = 1
+        self.validate_repository()
+    
+    # Restante do código permanece igual...
+```
+
+### 4. Atualizar main.py para Usar Novo GameRepository
+```python
+# Em main.py
+def main():
+    # ...
+    game_repository = GameRepository(content_dir="content/pages")
+    # ...
+```
+
+### 5. Implementar Testes de Integração
+Crie `tests/integration/test_content_loader.py`:
+```python
+import pytest
+import os
+from gamer_agent.content_loader import ContentLoader
+from gamer_agent.game_repository import GameRepository
+
+def test_content_loader_validates_pages(tmp_path):
+    """Testa que o loader valida páginas corretamente"""
+    # Criar diretório temporário com conteúdo de teste
+    pages_dir = tmp_path / "pages"
+    pages_dir.mkdir()
+    
+    # Criar página válida
+    valid_page = pages_dir / "001.yaml"
+    valid_page.write_text("""
+id: 1
+title: "Página Válida"
+content: "Conteúdo válido"
+choices:
+  - id: 1
+    text: "Escolha válida"
+""")
+    
+    loader = ContentLoader(str(pages_dir))
+    pages = loader.load_all_pages()
+    assert 1 in pages
+    assert pages[1]["title"] == "Página Válida"
+
+def test_content_loader_rejects_invalid_pages(tmp_path):
+    """Testa que o loader rejeita páginas inválidas"""
+    # Criar diretório temporário com conteúdo inválido
+    pages_dir = tmp_path / "pages"
+    pages_dir.mkdir()
+    
+    # Criar página inválida (falta título)
+    invalid_page = pages_dir / "001.yaml"
+    invalid_page.write_text("""
+id: 1
+content: "Falta título"
+choices:
+  - id: 1
+    text: "Escolha"
+""")
+    
+    loader = ContentLoader(str(pages_dir))
+    with pytest.raises(ValueError):
+        loader.load_all_pages()
+
+def test_game_repository_with_yaml_content(tmp_path):
+    """Testa integração completa com conteúdo YAML"""
+    # Configurar conteúdo de teste
+    pages_dir = tmp_path / "pages"
+    pages_dir.mkdir()
+    
+    # Criar página de teste
+    page = pages_dir / "001.yaml"
+    page.write_text("""
+id: 1
+title: "Teste"
+content: "Conteúdo de teste"
+choices:
+  - id: 1
+    text: "Escolha 1"
+""")
+    
+    # Testar GameRepository com conteúdo YAML
+    repo = GameRepository(content_dir=str(pages_dir))
+    assert repo.get_current_page()["title"] == "Teste"
+    assert len(repo.get_valid_choices({})) == 1
+```
+
+### 6. Atualizar o Script de Migração
+Modifique `scripts/migrate_pages_to_yaml.py` para converter automaticamente o conteúdo de `pages.py` para o formato YAML.
+
+## Critérios de Aceitação
+- [ ] ContentLoader carrega e valida conteúdo YAML corretamente
+- [ ] GameRepository funciona com o novo loader sem alterações significativas
+- [ ] Testes de integração passam com conteúdo YAML
+- [ ] Performance comparável ao sistema anterior (medido com benchmark)
+- [ ] Sistema funciona exatamente como antes da migração
+- [ ] Documentação clara do processo de criação de conteúdo
+
+## Exemplo de Implementação Completa
+```python
+# gamer_agent/content_loader.py
+import os
+import yaml
+import json
+from jsonschema import validate, ValidationError
+from typing import Dict, Any
+
+class ContentLoader:
+    """Carrega e valida o conteúdo do jogo a partir de arquivos YAML"""
+    
+    def __init__(self, content_dir: str = "content/pages"):
+        self.content_dir = content_dir
+        self.schema = self._load_schema()
+        self._cache = None
+    
+    def _load_schema(self) -> Dict:
+        """Carrega o schema de validação"""
+        # Caminho relativo ao local deste arquivo
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        schema_path = os.path.join(current_dir, "../content/schema.json")
+        
+        with open(schema_path) as f:
+            return json.load(f)
+    
+    def load_all_pages(self) -> Dict[int, Dict]:
+        """Carrega todas as páginas do diretório de conteúdo"""
+        if self._cache is not None:
+            return self._cache
+            
+        pages = {}
+        for filename in os.listdir(self.content_dir):
+            if filename.endswith(".yaml"):
+                file_path = os.path.join(self.content_dir, filename)
+                page = self._load_page(file_path)
+                pages[page["id"]] = page
+        
+        self._cache = pages
+        return pages
+    
+    def _load_page(self, file_path: str) -> Dict:
+        """Carrega e valida uma página específica"""
+        with open(file_path) as f:
+            page = yaml.safe_load(f)
+        
+        # Validação
+        try:
+            validate(instance=page, schema=self.schema)
+        except ValidationError as e:
+            raise ValueError(f"Erro ao validar {file_path}: {e.message}")
+        
+        return page
+    
+    def get_page(self, page_id: int) -> Dict:
+        """Obtém uma página específica pelo ID"""
+        pages = self.load_all_pages()
+        if page_id not in pages:
+            raise ValueError(f"Página {page_id} não encontrada")
+        return pages[page_id]
+```
+
+## Armadilhas Comuns a Evitar
+- **Não ignore a cache**: Carregar YAML é custoso; implemente cache simples
+- **Não faça validação opcional**: A validação é crítica para a integridade do conteúdo
+- **Não esqueça de tratar caminhos relativos**: Use `os.path.dirname(__file__)` para caminhos corretos
+- **Não misture responsabilidades**: O loader deve apenas carregar e validar, não processar conteúdo
+- **Não ignore a internacionalização**: Considere como lidar com múltiplos idiomas
+- **Não esqueça de testar cenários de erro**: Como arquivos ausentes ou permissões negadas
+
+## Notas Adicionais
+O Content Loader é um componente crítico para a separação código-conteúdo. Esta implementação segue o padrão Strategy, permitindo futuras extensões (como carregamento de JSON ou até mesmo de um banco de dados). A cache simples implementada evita recarregar o conteúdo repetidamente, melhorando a performance sem complexidade excessiva.
+
+---

@@ -1,0 +1,207 @@
+# task-02-test-character.md
+
+# Tarefa 0.2: Testar Character (Modelo de Estado)
+
+## Contexto
+O Character é o coração do sistema, representando o modelo de estado do jogador. A análise arquitetural identificou que a ausência de testes para este componente crítico torna o projeto frágil e arriscado de evoluir. Sem testes para o Character, não podemos garantir que mudanças em outras partes do sistema não quebrem a lógica central do jogo.
+
+## Objetivo
+Garantir que o modelo de estado do personagem (Character) funcione corretamente antes de qualquer modificação arquitetural, estabelecendo uma base sólida para refatorações futuras.
+
+## Instruções Passo a Passo
+
+### 1. Criar Arquivo de Teste
+```bash
+touch tests/unit/test_character.py
+```
+
+### 2. Implementar Fixtures Básicas
+```python
+import pytest
+from gamer_agent.character import Character
+
+@pytest.fixture
+def basic_character():
+    """Character com valores padrão para testes"""
+    return Character("Police Officer")
+```
+
+### 3. Testar Criação Básica
+```python
+def test_character_creation(basic_character):
+    """Testa que o personagem é criado com valores iniciais corretos"""
+    assert basic_character.name == "Police Officer"
+    assert basic_character.health == 10
+    assert basic_character.stamina == 10
+    assert basic_character.luck == 5
+    assert basic_character.magic == 5
+    assert basic_character.is_alive()
+```
+
+### 4. Testar Sistema de Vida
+```python
+def test_character_damage_and_healing(basic_character):
+    """Testa que o personagem pode receber dano e ser curado corretamente"""
+    initial_health = basic_character.health
+    
+    # Testa dano
+    basic_character.take_damage(5)
+    assert basic_character.health == initial_health - 5
+    assert basic_character.is_alive()
+    
+    # Testa cura
+    basic_character.heal_damage(3)
+    assert basic_character.health == initial_health - 2
+    
+    # Testa morte
+    basic_character.take_damage(basic_character.health)
+    assert not basic_character.is_alive()
+    
+    # Testa que não pode curar além do máximo
+    basic_character.heal_damage(100)
+    assert basic_character.health == initial_health
+```
+
+### 5. Testar Recursos (Sorte, Magia)
+```python
+def test_resource_management(basic_character):
+    """Testa gasto e recuperação de recursos"""
+    
+    # Testa sorte
+    initial_luck = basic_character.luck
+    basic_character.spend_luck(2)
+    assert basic_character.luck == initial_luck - 2
+    
+    # Testa magia
+    initial_magic = basic_character.magic
+    basic_character.spend_magic(1)
+    assert basic_character.magic == initial_magic - 1
+    
+    # Testa gasto excessivo
+    with pytest.raises(ValueError):
+        basic_character.spend_stamina(basic_character.stamina + 1)
+```
+
+### 6. Testar Aplicação de Efeitos
+```python
+def test_apply_effects(basic_character):
+    """Testa aplicação de diferentes tipos de efeitos"""
+    # Testa efeito simples
+    basic_character.apply_effects({"health": "+2"})
+    assert basic_character.health == 12
+    
+    # Testa múltiplos efeitos
+    basic_character.apply_effects({
+        "stamina": "-1",
+        "luck": "+1",
+        "magic": "+1"
+    })
+    assert basic_character.stamina == 9
+    assert basic_character.luck == 6
+    assert basic_character.magic == 6
+    
+    # Testa efeito de morte
+    basic_character.apply_effects({"health": f"-{basic_character.health}"})
+    assert not basic_character.is_alive()
+```
+
+### 7. Testar Rolagens de Dados
+```python
+def test_dice_rolls(basic_character, mocker):
+    """Testa rolagens de dados com mocks"""
+    # Mock para random.randint
+    mocker.patch('random.randint', return_value=5)
+    
+    # Testa rolagem simples
+    result = basic_character.roll_dice(6)
+    assert result == 5
+    
+    # Testa rolagem com modificador
+    result = basic_character.roll_dice(6, modifier=2)
+    assert result == 7
+    
+    # Testa rolagem com sorte
+    result = basic_character.roll_dice_with_luck(6)
+    assert result == 5  # Ainda 5, mas com lógica de sorte aplicada
+```
+
+## Critérios de Aceitação
+- [ ] Todos os métodos públicos do Character testados
+- [ ] 90%+ de cobertura de linhas (verificado com `make coverage`)
+- [ ] Testes executam em < 1 segundo
+- [ ] Testes validam cenários de sucesso e falha
+- [ ] Todos os testes passam consistentemente
+- [ ] Documentação clara dos cenários testados
+
+## Exemplo de Implementação Completa
+```python
+# tests/unit/test_character.py
+import pytest
+from gamer_agent.character import Character
+
+@pytest.fixture
+def basic_character():
+    """Character com valores padrão para testes"""
+    return Character("Police Officer")
+
+def test_character_creation(basic_character):
+    """Testa que o personagem é criado com valores iniciais corretos"""
+    assert basic_character.name == "Police Officer"
+    assert basic_character.health == 10
+    assert basic_character.stamina == 10
+    assert basic_character.luck == 5
+    assert basic_character.magic == 5
+    assert basic_character.is_alive()
+
+def test_character_damage_and_healing(basic_character):
+    """Testa que o personagem pode receber dano e ser curado corretamente"""
+    initial_health = basic_character.health
+    
+    # Testa dano
+    basic_character.take_damage(5)
+    assert basic_character.health == initial_health - 5
+    assert basic_character.is_alive()
+    
+    # Testa cura
+    basic_character.heal_damage(3)
+    assert basic_character.health == initial_health - 2
+    
+    # Testa morte
+    basic_character.take_damage(basic_character.health)
+    assert not basic_character.is_alive()
+    
+    # Testa que não pode curar além do máximo
+    basic_character.heal_damage(100)
+    assert basic_character.health == initial_health
+
+def test_resource_management(basic_character):
+    """Testa gasto e recuperação de recursos"""
+    
+    # Testa sorte
+    initial_luck = basic_character.luck
+    basic_character.spend_luck(2)
+    assert basic_character.luck == initial_luck - 2
+    
+    # Testa magia
+    initial_magic = basic_character.magic
+    basic_character.spend_magic(1)
+    assert basic_character.magic == initial_magic - 1
+    
+    # Testa gasto excessivo
+    with pytest.raises(ValueError):
+        basic_character.spend_stamina(basic_character.stamina + 1)
+```
+
+## Armadilhas Comuns a Evitar
+- **Não testar apenas caminhos felizes**: Inclua testes para cenários de erro e borda
+- **Não depender de estado global**: Cada teste deve ser independente
+- **Não usar números mágicos**: Defina constantes para valores usados repetidamente
+- **Não testar implementação, mas comportamento**: Foco no "o quê", não no "como"
+- **Não ignorar a legibilidade**: Testes são documentação, devem ser claros
+- **Não esquecer de testar validações**: Como gasto excessivo de recursos
+
+## Notas Adicionais
+O Character é o componente mais estável do sistema e deve ser testado primeiro. Esses testes servirão como "canário na mina" para detectar problemas em futuras refatorações. Lembre-se que a cobertura de código é apenas uma métrica - o importante é testar o comportamento crítico do sistema.
+
+---
+

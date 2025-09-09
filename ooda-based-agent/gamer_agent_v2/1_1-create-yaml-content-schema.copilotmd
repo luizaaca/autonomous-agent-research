@@ -1,0 +1,190 @@
+
+# task-11-create-yaml-content-schema.md
+
+# Tarefa 1.1: Criar Schema de Conteúdo em YAML
+
+## Contexto
+Atualmente, o conteúdo do jogo está fortemente acoplado ao código em `pages.py`, o que viola princípios fundamentais de arquitetura de jogos. A análise arquitetural identificou esta como uma "FALHA CRÍTICA 2: Acoplamento de Código e Conteúdo" com impacto ALTO, pois impede a colaboração com designers e escritores, torna a manutenção cara e cria risco operacional (modificações de conteúdo exigem deploy de código).
+
+## Objetivo
+Separar código de conteúdo, criando um schema YAML bem definido para o conteúdo do jogo que permita edição por não-programadores e futura integração com ferramentas de autoria.
+
+## Instruções Passo a Passo
+
+### 1. Definir Estrutura de Diretórios
+```bash
+mkdir -p content/pages
+touch content/schema.yaml
+```
+
+### 2. Criar Schema de Validação JSON
+Crie `content/schema.json`:
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Game Content Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "ID único da página"
+    },
+    "title": {
+      "type": "string",
+      "description": "Título da página"
+    },
+    "content": {
+      "type": "string",
+      "description": "Texto principal da página"
+    },
+    "choices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "text": {"type": "string"},
+          "conditions": {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+            "description": "Condições para a escolha ser válida (ex: {\"stamina\": \">5\"})"
+          },
+          "effects": {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+            "description": "Efeitos da escolha (ex: {\"stamina\": \"-2\"})"
+          }
+        },
+        "required": ["id", "text"]
+      }
+    }
+  },
+  "required": ["id", "title", "content", "choices"]
+}
+```
+
+### 3. Migrar Conteúdo para YAML
+Crie `content/pages/001.yaml`:
+```yaml
+id: 1
+title: "Bem-vindo à Aventura"
+content: "Você está em uma floresta sombria..."
+choices:
+  - id: 1
+    text: "Seguir para o norte"
+    conditions: 
+      stamina: ">5"
+    effects: 
+      stamina: "-2"
+  - id: 2
+    text: "Descansar"
+    effects: 
+      stamina: "+3"
+```
+
+### 4. Criar Script de Validação
+Crie `scripts/validate_content.py`:
+```python
+import json
+import yaml
+import os
+from jsonschema import validate, ValidationError
+
+def validate_yaml_file(file_path, schema_path):
+    """Valida um arquivo YAML contra um schema JSON"""
+    with open(schema_path) as f:
+        schema = json.load(f)
+    
+    with open(file_path) as f:
+        content = yaml.safe_load(f)
+    
+    try:
+        validate(instance=content, schema=schema)
+        print(f"✅ {file_path} validado com sucesso")
+        return True
+    except ValidationError as e:
+        print(f"❌ Erro ao validar {file_path}: {e.message}")
+        return False
+
+def validate_all_content():
+    """Valida todos os arquivos de conteúdo"""
+    schema_path = "content/schema.json"
+    pages_dir = "content/pages"
+    
+    all_valid = True
+    for filename in os.listdir(pages_dir):
+        if filename.endswith(".yaml"):
+            file_path = os.path.join(pages_dir, filename)
+            if not validate_yaml_file(file_path, schema_path):
+                all_valid = False
+    
+    return all_valid
+
+if __name__ == "__main__":
+    if validate_all_content():
+        print("\nTodos os arquivos de conteúdo são válidos!")
+        exit(0)
+    else:
+        print("\nErros encontrados na validação do conteúdo!")
+        exit(1)
+```
+
+### 5. Atualizar Makefile
+Adicione ao `Makefile`:
+```makefile
+validate-content:
+	python scripts/validate_content.py
+
+migrate-content:
+	python scripts/migrate_pages_to_yaml.py
+```
+
+### 6. Migrar Conteúdo Existente
+Crie `scripts/migrate_pages_to_yaml.py` para converter automaticamente o conteúdo de `pages.py` para YAML.
+
+## Critérios de Aceitação
+- [ ] Schema de validação completo e funcional
+- [ ] Todos os arquivos de conteúdo YAML válidos conforme o schema
+- [ ] Script de validação funciona e retorna código de saída adequado
+- [ ] 100% do conteúdo migrado com sucesso
+- [ ] Sistema funciona exatamente como antes da migração (verificado por testes)
+- [ ] Documentação clara do schema para autores não técnicos
+
+## Exemplo de Implementação Completa
+Exemplo de `content/pages/002.yaml`:
+```yaml
+id: 2
+title: "A Clareira"
+content: "Você chega a uma clareira com uma fonte brilhante no centro."
+choices:
+  - id: 1
+    text: "Beber da fonte"
+    conditions:
+      health: "<10"
+    effects:
+      health: "+3"
+      magic: "+1"
+  - id: 2
+    text: "Ignorar a fonte e seguir em frente"
+    effects:
+      stamina: "-1"
+  - id: 3
+    text: "Examinar a fonte mais de perto"
+    conditions:
+      luck: ">=3"
+    effects:
+      magic: "+2"
+```
+
+## Armadilhas Comuns a Evitar
+- **Não ignore a validação**: Sem schema rigoroso, o conteúdo pode se tornar inconsistente
+- **Não use sintaxe YAML complexa**: Mantenha simples para facilitar edição por não-programadores
+- **Não esqueça de tratar números como strings**: Em YAML, `>5` é uma string, não uma comparação
+- **Não misture lógica com conteúdo**: O YAML deve conter apenas dados, não código
+- **Não ignore a documentação para autores**: Crie um guia simples para escritores
+- **Não esqueça de atualizar o .gitignore**: Adicione arquivos temporários do processo de migração
+
+## Notas Adicionais
+A separação código-conteúdo é uma das decisões arquiteturais mais importantes para jogos. Projetos profissionais como Unity e Unreal usam abordagens semelhantes com sistemas de asset. Esta mudança permitirá que designers e escritores trabalhem independentemente dos programadores, acelerando drasticamente o desenvolvimento do conteúdo.
+
+---
