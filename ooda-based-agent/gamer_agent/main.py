@@ -74,14 +74,14 @@ Exemplos:
             print("[INFO] Modo humano: Use o console para interagir")
             
         elif args.player == 'llm':
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
-                print("[ERROR] GEMINI_API_KEY não encontrada nas variáveis de ambiente")
-                print("        Configure a chave da API antes de usar o modo LLM:")
-                print("        export GEMINI_API_KEY='sua_chave_aqui'")
-                sys.exit(1)
-            
-            player_adapter = LLMPlayerAdapter(api_key=api_key)
+            # api_key = os.getenv("GEMINI_API_KEY")
+            # if not api_key:
+            #     print("[ERROR] GEMINI_API_KEY não encontrada nas variáveis de ambiente")
+            #     print("        Configure a chave da API antes de usar o modo LLM:")
+            #     print("        export GEMINI_API_KEY='sua_chave_aqui'")
+            #     sys.exit(1)
+            api_key = "DUMMY_KEY_FOR_TESTING"  # Substitua pela sua chave real ou use variável de ambiente
+            player_adapter = LLMPlayerAdapter()
             print("[INFO] Modo LLM: IA tomará decisões via API")
             
         else:  # default: demo

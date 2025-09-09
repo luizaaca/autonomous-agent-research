@@ -207,7 +207,10 @@ class Character:
             KeyError: Se a característica não existir
         """
         if char_name not in self._sheet["characteristics"]:
-            raise KeyError(f"Característica '{char_name}' não encontrada")
+            return {
+                "full": 50,
+                "half": 50
+            }
         return self._sheet["characteristics"][char_name].copy()
     
     def get_skill(self, skill_name: str, skill_type: str = "common") -> Dict[str, int]:
@@ -610,14 +613,11 @@ class Character:
         try:
             skill_data = self.get_skill(skill_name, skill_type)
         except KeyError as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "roll": 0,
-                "target": 0,
-                "level": 0,
-                "description": "Skill not found"
+            skill_data = {
+                "full": 50,
+                "half": 50
             }
+            print(f"Erro ao buscar habilidade: {e}")
         
         # Verificar modificadores se habilitado
         final_bonus_dice = bonus_dice

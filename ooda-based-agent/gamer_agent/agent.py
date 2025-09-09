@@ -449,6 +449,7 @@ class Agent:
                 else:
                     raise ValueError(f"Formato de 'roll' inválido: {roll_data}")
 
+                print(f"Usando dificuldade: {difficulty}, skill: {skill_name}")
                 roll_result = self.cockpit.character.roll_skill(skill_name, "common", difficulty=difficulty) or \
                               self.cockpit.character.roll_skill(skill_name, "combat", difficulty=difficulty) or \
                               self.cockpit.character.roll_skill(skill_name, "expert", difficulty=difficulty) or \
