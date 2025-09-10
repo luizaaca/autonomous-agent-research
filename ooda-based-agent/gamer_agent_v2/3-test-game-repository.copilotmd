@@ -1,0 +1,223 @@
+# task-03-test-game-repository.md
+
+# Tarefa 0.3: Testar GameRepository
+
+## Contexto
+O GameRepository é a camada de acesso a dados do projeto, responsável por abstrair a origem do conteúdo do jogo. A análise arquitetural identificou que, sem testes para este componente, não podemos garantir que a migração do conteúdo para um formato separado (como YAML) mantenha a funcionalidade existente. Este componente é crítico para a integridade do jogo.
+
+## Objetivo
+Garantir que a camada de acesso a dados funcione corretamente, permitindo futuras refatorações (como a migração do conteúdo de Python para YAML) com segurança.
+
+## Instruções Passo a Passo
+
+### 1. Criar Arquivo de Teste
+```bash
+touch tests/unit/test_game_repository.py
+```
+
+### 2. Configurar Mock para Páginas
+```python
+import pytest
+from unittest.mock import MagicMock
+from gamer_agent.game_repository import GameRepository
+
+# Mock de dados de exemplo
+MOCK_PAGES = {
+    1: {
+        "title": "Página Inicial",
+        "content": "Você está na floresta.",
+        "choices": [
+            {"id": 1, "text": "Ir para norte", "effects": {"stamina": "-1"}},
+            {"id": 2, "text": "Descansar", "effects": {"stamina": "+2"}}
+        ]
+    },
+    2: {
+        "title": "Clareira",
+        "content": "Você encontrou uma clareira.",
+        "choices": [
+            {"id": 3, "text": "Explorar", "conditions": {"stamina": ">3"}}
+        ]
+    }
+}
+```
+
+### 3. Testar Inicialização
+```python
+def test_repository_initialization():
+    """Testa que o repositório é inicializado corretamente"""
+    repo = GameRepository(MOCK_PAGES)
+    assert repo.current_page_id == 1
+    assert repo.get_current_page()["title"] == "Página Inicial"
+```
+
+### 4. Testar Navegação Básica
+```python
+def test_page_navigation():
+    """Testa navegação entre páginas"""
+    repo = GameRepository(MOCK_PAGES)
+    
+    # Página inicial
+    assert repo.current_page_id == 1
+    assert repo.get_current_page()["title"] == "Página Inicial"
+    
+    # Navega para página 2
+    repo.navigate_to(2)
+    assert repo.current_page_id == 2
+    assert repo.get_current_page()["title"] == "Clareira"
+    
+    # Tenta navegar para página inválida
+    with pytest.raises(ValueError):
+        repo.navigate_to(999)
+```
+
+### 5. Testar Validação de Escolhas
+```python
+def test_choice_validation():
+    """Testa validação de escolhas com base em condições"""
+    repo = GameRepository(MOCK_PAGES)
+    
+    # Sem condições - deve ser válida
+    choice_no_conditions = {"id": 1, "text": "Teste"}
+    assert repo.is_choice_valid(choice_no_conditions, {}) == True
+    
+    # Com condições simples - deve ser válida
+    choice_with_conditions = {"id": 3, "text": "Teste", "conditions": {"stamina": ">3"}}
+    assert repo.is_choice_valid(choice_with_conditions, {"stamina": 5}) == True
+    assert repo.is_choice_valid(choice_with_conditions, {"stamina": 2}) == False
+    
+    # Com múltiplas condições - deve ser válida apenas se todas forem satisfeitas
+    choice_multiple_conditions = {
+        "id": 4,
+        "text": "Teste",
+        "conditions": {"stamina": ">3", "luck": ">=2"}
+    }
+    assert repo.is_choice_valid(choice_multiple_conditions, {"stamina": 5, "luck": 3}) == True
+    assert repo.is_choice_valid(choice_multiple_conditions, {"stamina": 2, "luck": 3}) == False
+    assert repo.is_choice_valid(choice_multiple_conditions, {"stamina": 5, "luck": 1}) == False
+```
+
+### 6. Testar Obtenção de Escolhas Válidas
+```python
+def test_get_valid_choices():
+    """Testa obtenção de escolhas válidas com base no estado do personagem"""
+    repo = GameRepository(MOCK_PAGES)
+    
+    # Estado com stamina alta
+    valid_choices_high_stamina = repo.get_valid_choices({"stamina": 5})
+    assert len(valid_choices_high_stamina) == 2
+    assert valid_choices_high_stamina[0]["id"] == 1
+    assert valid_choices_high_stamina[1]["id"] == 2
+    
+    # Estado com stamina baixa
+    valid_choices_low_stamina = repo.get_valid_choices({"stamina": 2})
+    assert len(valid_choices_low_stamina) == 1
+    assert valid_choices_low_stamina[0]["id"] == 2  # Apenas "Descansar" é válido
+```
+
+### 7. Testar Erros de Validação
+```python
+def test_validation_errors():
+    """Testa tratamento de erros de validação"""
+    # Dados inválidos
+    invalid_pages = {
+        1: {"content": "Falta título"},  # Falta título
+        2: {"title": "Válido", "content": "OK", "choices": "não é lista"}  # Choices deve ser lista
+    }
+    
+    with pytest.raises(ValueError):
+        GameRepository(invalid_pages)
+```
+
+## Critérios de Aceitação
+- [ ] Todos os métodos públicos do GameRepository testados
+- [ ] 85%+ de cobertura de linhas (verificado com `make coverage`)
+- [ ] Testes validam cenários de sucesso e falha
+- [ ] Testes para condições complexas de escolhas
+- [ ] Testes para validação de dados de entrada
+- [ ] Todos os testes passam consistentemente
+
+## Exemplo de Implementação Completa
+```python
+# tests/unit/test_game_repository.py
+import pytest
+from unittest.mock import MagicMock
+from gamer_agent.game_repository import GameRepository
+
+# Mock de dados de exemplo
+MOCK_PAGES = {
+    1: {
+        "title": "Página Inicial",
+        "content": "Você está na floresta.",
+        "choices": [
+            {"id": 1, "text": "Ir para norte", "effects": {"stamina": "-1"}},
+            {"id": 2, "text": "Descansar", "effects": {"stamina": "+2"}}
+        ]
+    },
+    2: {
+        "title": "Clareira",
+        "content": "Você encontrou uma clareira.",
+        "choices": [
+            {"id": 3, "text": "Explorar", "conditions": {"stamina": ">3"}}
+        ]
+    }
+}
+
+def test_repository_initialization():
+    """Testa que o repositório é inicializado corretamente"""
+    repo = GameRepository(MOCK_PAGES)
+    assert repo.current_page_id == 1
+    assert repo.get_current_page()["title"] == "Página Inicial"
+
+def test_page_navigation():
+    """Testa navegação entre páginas"""
+    repo = GameRepository(MOCK_PAGES)
+    
+    # Página inicial
+    assert repo.current_page_id == 1
+    assert repo.get_current_page()["title"] == "Página Inicial"
+    
+    # Navega para página 2
+    repo.navigate_to(2)
+    assert repo.current_page_id == 2
+    assert repo.get_current_page()["title"] == "Clareira"
+    
+    # Tenta navegar para página inválida
+    with pytest.raises(ValueError):
+        repo.navigate_to(999)
+
+def test_choice_validation():
+    """Testa validação de escolhas com base em condições"""
+    repo = GameRepository(MOCK_PAGES)
+    
+    # Sem condições - deve ser válida
+    choice_no_conditions = {"id": 1, "text": "Teste"}
+    assert repo.is_choice_valid(choice_no_conditions, {}) == True
+    
+    # Com condições simples - deve ser válida
+    choice_with_conditions = {"id": 3, "text": "Teste", "conditions": {"stamina": ">3"}}
+    assert repo.is_choice_valid(choice_with_conditions, {"stamina": 5}) == True
+    assert repo.is_choice_valid(choice_with_conditions, {"stamina": 2}) == False
+    
+    # Com múltiplas condições - deve ser válida apenas se todas forem satisfeitas
+    choice_multiple_conditions = {
+        "id": 4,
+        "text": "Teste",
+        "conditions": {"stamina": ">3", "luck": ">=2"}
+    }
+    assert repo.is_choice_valid(choice_multiple_conditions, {"stamina": 5, "luck": 3}) == True
+    assert repo.is_choice_valid(choice_multiple_conditions, {"stamina": 2, "luck": 3}) == False
+    assert repo.is_choice_valid(choice_multiple_conditions, {"stamina": 5, "luck": 1}) == False
+```
+
+## Armadilhas Comuns a Evitar
+- **Não testar apenas dados válidos**: Inclua casos com dados malformados
+- **Não usar mocks desnecessários**: Para este componente, dados estáticos são suficientes
+- **Não testar apenas caminhos felizes**: Teste também cenários de erro
+- **Não esquecer de testar a validação de dados**: É crítica para a integridade do sistema
+- **Não hardcodar IDs de página**: Use constantes ou parâmetros para facilitar manutenção
+- **Não ignorar a legibilidade dos testes**: Cada teste deve testar UM comportamento
+
+## Notas Adicionais
+O GameRepository é fundamental para a migração do conteúdo do jogo de código para dados estruturados. Estes testes garantirão que a funcionalidade permaneça inalterada após a migração. Lembre-se que a lógica de validação de escolhas é particularmente crítica - é onde muitos bugs de jogabilidade ocorrem.
+
+---

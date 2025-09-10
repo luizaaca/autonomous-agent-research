@@ -1,0 +1,111 @@
+# task-01-setup-testing-infrastructure.md
+
+# Tarefa 0.1: Configurar Infraestrutura de Testes
+
+## Contexto
+Esta é a primeira e mais crítica tarefa do projeto. Sem uma infraestrutura de testes sólida, qualquer modificação no código é realizada "à cega", com alto risco de introduzir bugs que quebrem funcionalidades existentes. A análise arquitetural identificou a "FALHA CRÍTICA 1: Ausência Total de Testes Automatizados" com impacto ALTO, pois torna o projeto frágil, caro de manter e arriscado de evoluir.
+
+## Objetivo
+Estabelecer uma infraestrutura de testes robusta que permita refatorações seguras e desenvolvimento confiável. Esta infraestrutura servirá como "rede de segurança" para todas as futuras modificações no projeto.
+
+## Instruções Passo a Passo
+
+### 1. Configurar Dependências de Teste
+```bash
+# Adicione ao requirements.txt
+pytest==7.4.0
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+```
+
+### 2. Criar Estrutura de Diretórios para Testes
+```bash
+mkdir -p tests/{unit,integration,acceptance}
+touch tests/__init__.py
+touch tests/unit/__init__.py
+touch tests/integration/__init__.py
+touch tests/acceptance/__init__.py
+```
+
+### 3. Configurar Arquivo de Configuração do pytest
+Crie `pytest.ini` na raiz do projeto:
+```ini
+[pytest]
+addopts = -v --cov=gamer_agent --cov-report=term-missing --cov-report=html
+python_files = test_*.py
+testpaths = tests
+```
+
+### 4. Configurar Relatório de Cobertura
+Crie `.coveragerc` na raiz do projeto:
+```ini
+[run]
+source = gamer_agent
+omit = 
+    */__init__.py
+    */migrations/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+```
+
+### 5. Atualizar Makefile
+Adicione ao `Makefile`:
+```makefile
+test:
+	pytest -v
+
+test-watch:
+	ptw -- --cov=gamer_agent --cov-report=term-missing
+
+coverage:
+	pytest --cov=gamer_agent --cov-report=html
+	@echo "Relatório de cobertura disponível em htmlcov/index.html"
+	open htmlcov/index.html
+```
+
+### 6. Testar Instalação
+```bash
+make test
+```
+Deve retornar 0 testes executados (mas sem erros).
+
+## Critérios de Aceitação
+- [ ] Execução de `make test` funciona sem erros
+- [ ] Relatório de cobertura HTML gerado em `htmlcov/`
+- [ ] Comando `make coverage` abre automaticamente o relatório no navegador
+- [ ] Estrutura de diretórios de testes organizada conforme especificado
+- [ ] Arquivos de configuração pytest.ini e .coveragerc presentes
+- [ ] 100% de aprovação em testes vazios (0 falhas)
+
+## Exemplo de Implementação
+Após a configuração, um teste simples deve funcionar:
+```python
+# tests/unit/test_example.py
+def test_canary():
+    """Teste de canário para verificar configuração de testes"""
+    assert True
+```
+
+Executando:
+```bash
+$ make test
+...
+tests/unit/test_example.py::test_canary PASSED
+```
+
+## Armadilhas Comuns a Evitar
+- **Não configure cobertura para diretórios incorretos**: Certifique-se que `source = gamer_agent` no .coveragerc aponta para o pacote principal do projeto
+- **Não ignore avisos do pytest**: Eles podem indicar problemas de configuração
+- **Não use testes de integração como primeira linha de defesa**: Comece com testes unitários para componentes estáveis
+- **Não esqueça de adicionar ao .gitignore**: Adicione `htmlcov/` e `.pytest_cache/` ao .gitignore
+- **Não ignore a velocidade dos testes**: Testes lentos não serão executados com frequência
+
+## Notas Adicionais
+Esta tarefa é a fundação de todo o projeto. Sem ela, qualquer outra modificação é arriscada. Lembre-se: "Teste primeiro, refatore depois, implemente recursos por último" é a máxima da indústria de jogos para projetos sustentáveis.
+
+---
+

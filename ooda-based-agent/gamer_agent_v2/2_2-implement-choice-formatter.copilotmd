@@ -1,0 +1,301 @@
+# task-2_2-implement-choice-formatter.copilotmd
+
+# Tarefa 2.2: Implementar ChoiceFormatter
+
+## Contexto
+A especificação `spec_command_to_string_.md` define regras para textualizar escolhas de forma consistente, mas esta funcionalidade não foi implementada. A análise arquitetural identificou que a lógica de formatação de escolhas está espalhada e inconsistente, contribuindo para a "FALHA ARQUITETURAL 3: Violação de Responsabilidade na Camada de Adapters/View".
+
+## Objetivo
+Implementar uma função centralizada `format_choice_to_string` que converta objetos de escolha em strings formatadas de acordo com as regras definidas na especificação, garantindo consistência na apresentação das opções ao jogador.
+
+## Instruções Passo a Passo
+
+### 1. Criar Módulo de Formatação
+```bash
+touch gamer_agent/choice_formatter.py
+```
+
+### 2. Implementar Função de Formatação Básica
+```python
+def format_choice_to_string(choice: dict) -> str:
+    """Formata uma escolha para exibição ao jogador"""
+    # Texto base da escolha
+    formatted = choice["text"]
+    
+    # Adicionar condições, se existirem
+    if "conditions" in choice and choice["conditions"]:
+        cond_text = _format_conditions(choice["conditions"])
+        if cond_text:
+            formatted += f" [condição: {cond_text}]"
+    
+    # Adicionar efeitos, se existirem
+    if "effects" in choice and choice["effects"]:
+        effects_text = _format_effects(choice["effects"])
+        if effects_text:
+            formatted += f" [efeitos: {effects_text}]"
+    
+    return formatted
+
+def _format_conditions(conditions: dict) -> str:
+    """Formata condições de uma escolha"""
+    parts = []
+    for attr, condition in conditions.items():
+        # Converter operador para texto legível
+        if ">" in condition:
+            value = condition.replace(">", "").strip()
+            parts.append(f"{attr} > {value}")
+        elif ">=" in condition:
+            value = condition.replace(">=", "").strip()
+            parts.append(f"{attr} >= {value}")
+        elif "<" in condition:
+            value = condition.replace("<", "").strip()
+            parts.append(f"{attr} < {value}")
+        elif "<=" in condition:
+            value = condition.replace("<=", "").strip()
+            parts.append(f"{attr} <= {value}")
+        elif "==" in condition:
+            value = condition.replace("==", "").strip()
+            parts.append(f"{attr} == {value}")
+        else:
+            parts.append(f"{attr} {condition}")
+    
+    return ", ".join(parts)
+
+def _format_effects(effects: dict) -> str:
+    """Formata efeitos de uma escolha"""
+    parts = []
+    for attr, effect in effects.items():
+        # Remover espaços em branco
+        effect = effect.strip()
+        
+        # Converter para texto legível
+        if effect.startswith("+"):
+            value = effect[1:].strip()
+            parts.append(f"{attr} +{value}")
+        elif effect.startswith("-"):
+            value = effect[1:].strip()
+            parts.append(f"{attr} -{value}")
+        else:
+            parts.append(f"{attr} {effect}")
+    
+    return ", ".join(parts)
+```
+
+### 3. Integrar com ConsoleRenderer
+Atualize `gamer_agent/renderers.py`:
+```python
+from .choice_formatter import format_choice_to_string
+
+class ConsoleRenderer:
+    # ...
+    
+    def _format_choices(self, choices: list) -> str:
+        """Formata as escolhas disponíveis com formatação rica"""
+        formatted_choices = []
+        for i, choice in enumerate(choices):
+            formatted = format_choice_to_string(choice)
+            formatted_choices.append(f"[green]{i+1}[/green]. {formatted}")
+        
+        return "\n".join(formatted_choices)
+```
+
+### 4. Integrar com LLMPromptRenderer
+Atualize `gamer_agent/renderers.py`:
+```python
+from .choice_formatter import format_choice_to_string
+
+class LLMPromptRenderer:
+    # ...
+    
+    def render(self, game_state: GameStateDTO) -> str:
+        # ...
+        prompt += "\n## ESCOLHAS DISPONÍVEIS\n"
+        for i, choice in enumerate(game_state.valid_choices):
+            formatted = format_choice_to_string(choice)
+            prompt += f"{i+1}. {formatted}\n"
+        # ...
+```
+
+### 5. Implementar Testes Unitários
+Crie `tests/unit/test_choice_formatter.py`:
+```python
+import pytest
+from gamer_agent.choice_formatter import format_choice_to_string
+
+def test_basic_choice():
+    """Testa formatação de escolha básica sem condições ou efeitos"""
+    choice = {
+        "id": 1,
+        "text": "Seguir em frente"
+    }
+    assert format_choice_to_string(choice) == "Seguir em frente"
+
+def test_choice_with_conditions():
+    """Testa formatação de escolha com condições"""
+    choice = {
+        "id": 2,
+        "text": "Atacar o monstro",
+        "conditions": {
+            "stamina": ">3",
+            "health": ">=5"
+        }
+    }
+    result = format_choice_to_string(choice)
+    assert "Atacar o monstro [condição: stamina > 3, health >= 5]" in result
+
+def test_choice_with_effects():
+    """Testa formatação de escolha com efeitos"""
+    choice = {
+        "id": 3,
+        "text": "Beber poção",
+        "effects": {
+            "health": "+3",
+            "stamina": "-1"
+        }
+    }
+    result = format_choice_to_string(choice)
+    assert "Beber poção [efeitos: health +3, stamina -1]" in result
+
+def test_choice_with_conditions_and_effects():
+    """Testa formatação de escolha com condições e efeitos"""
+    choice = {
+        "id": 4,
+        "text": "Usar magia",
+        "conditions": {"magic": ">=2"},
+        "effects": {"magic": "-1", "health": "+2"}
+    }
+    result = format_choice_to_string(choice)
+    expected = "Usar magia [condição: magic >= 2] [efeitos: magic -1, health +2]"
+    assert result == expected
+
+def test_choice_with_complex_conditions():
+    """Testa formatação de condições complexas"""
+    choice = {
+        "id": 5,
+        "text": "Abrir cofre",
+        "conditions": {
+            "luck": "==5",
+            "stamina": "<2"
+        }
+    }
+    result = format_choice_to_string(choice)
+    assert "Abrir cofre [condição: luck == 5, stamina < 2]" in result
+```
+
+### 6. Atualizar Documentação
+Adicione ao README.md:
+```markdown
+## Formatação de Escolhas
+
+As escolhas são formatadas de forma consistente usando o `ChoiceFormatter`:
+
+- Texto base da escolha
+- Condições exibidas como `[condição: attribute operator value]`
+- Efeitos exibidos como `[efeitos: attribute +value/-value]`
+
+Exemplo:  
+`1. Atacar o monstro [condição: stamina > 3, health >= 5] [efeitos: stamina -1, health -2]`
+```
+
+## Critérios de Aceitação
+- [ ] Todas as regras do spec implementadas
+- [ ] 95%+ de cobertura de código
+- [ ] Formatação consistente em todos os contextos (console e LLM)
+- [ ] Testes unitários completos cobrindo todos os casos
+- [ ] Integração correta com ambos os renderizadores
+- [ ] Documentação clara do formato de exibição
+
+## Exemplo de Implementação Completa
+```python
+# gamer_agent/choice_formatter.py
+def format_choice_to_string(choice: dict) -> str:
+    """
+    Formata uma escolha para exibição ao jogador, seguindo as regras definidas.
+    
+    Args:
+        choice: Dicionário representando uma escolha, com possíveis campos:
+            - text: Texto base da escolha
+            - conditions: Dicionário de condições (ex: {"stamina": ">5"})
+            - effects: Dicionário de efeitos (ex: {"stamina": "-2"})
+    
+    Returns:
+        String formatada com texto, condições e efeitos
+    """
+    # Texto base da escolha
+    formatted = choice["text"]
+    
+    # Adicionar condições, se existirem
+    if "conditions" in choice and choice["conditions"]:
+        cond_text = _format_conditions(choice["conditions"])
+        if cond_text:
+            formatted += f" [condição: {cond_text}]"
+    
+    # Adicionar efeitos, se existirem
+    if "effects" in choice and choice["effects"]:
+        effects_text = _format_effects(choice["effects"])
+        if effects_text:
+            formatted += f" [efeitos: {effects_text}]"
+    
+    return formatted
+
+def _format_conditions(conditions: dict) -> str:
+    """Formata condições de uma escolha para exibição legível"""
+    parts = []
+    for attr, condition in conditions.items():
+        condition = condition.strip()
+        
+        # Detectar operador e valor
+        if ">" in condition and not ">=" in condition:
+            op = ">"
+            value = condition.split(">")[1].strip()
+        elif ">=" in condition:
+            op = ">="
+            value = condition.split(">=")[1].strip()
+        elif "<" in condition and not "<=" in condition:
+            op = "<"
+            value = condition.split("<")[1].strip()
+        elif "<=" in condition:
+            op = "<="
+            value = condition.split("<=")[1].strip()
+        elif "==" in condition:
+            op = "=="
+            value = condition.split("==")[1].strip()
+        else:
+            op = ""
+            value = condition
+        
+        parts.append(f"{attr} {op} {value}")
+    
+    return ", ".join(parts)
+
+def _format_effects(effects: dict) -> str:
+    """Formata efeitos de uma escolha para exibição legível"""
+    parts = []
+    for attr, effect in effects.items():
+        effect = effect.strip()
+        
+        if effect.startswith("+"):
+            value = effect[1:].strip()
+            parts.append(f"{attr} +{value}")
+        elif effect.startswith("-"):
+            value = effect[1:].strip()
+            parts.append(f"{attr} -{value}")
+        else:
+            parts.append(f"{attr} {effect}")
+    
+    return ", ".join(parts)
+```
+
+## Armadilhas Comuns a Evitar
+- **Não hardcode operadores**: Implemente lógica flexível para diferentes operadores
+- **Não ignore a legibilidade**: O formato deve ser claro para jogadores humanos
+- **Não faça suposições sobre a estrutura**: Valide a presença de campos opcionais
+- **Não esqueça de tratar espaços em branco**: Eles podem causar problemas na formatação
+- **Não misture formatação para humanos e LLM**: Mantenha a mesma lógica de formatação
+- **Não ignore casos extremos**: Como escolhas sem texto ou com campos vazios
+
+## Notas Adicionais
+A formatação consistente de escolhas é crítica para a experiência do jogador. Este componente garante que todas as escolhas sejam apresentadas de forma padronizada, melhorando a usabilidade e a clareza das opções disponíveis. A implementação segue o princípio DRY, eliminando código duplicado entre os diferentes renderizadores.
+
+---
+

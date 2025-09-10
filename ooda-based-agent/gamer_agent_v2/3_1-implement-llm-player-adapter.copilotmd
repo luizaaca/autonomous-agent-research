@@ -1,0 +1,380 @@
+# task-3_1-implement-llm-player-adapter.copilotmd
+
+# Tarefa 3.1: Implementar LLMPlayerAdapter
+
+## Contexto
+O `LLMPlayerAdapter` atual é apenas um stub não funcional, o que viola a promessa do projeto de suportar jogabilidade via IA. A análise arquitetural identificou esta como uma "FALHA ARQUITETURAL 4: Funcionalidades Essenciais Incompletas" com impacto MÉDIO, pois o projeto não entrega o valor prometido em sua própria documentação.
+
+## Objetivo
+Tornar o modo de jogo por IA funcional, implementando um `LLMPlayerAdapter` robusto que interaja com a API do Google Gemini (ou outro serviço LLM) para tomar decisões de jogo.
+
+## Instruções Passo a Passo
+
+### 1. Criar Interface de Serviço LLM
+Crie `gamer_agent/llm_service.py`:
+```python
+from abc import ABC, abstractmethod
+from typing import Protocol
+
+class LLMService(Protocol):
+    """Interface para serviços de LLM"""
+    
+    @abstractmethod
+    def generate_response(self, prompt: str) -> str:
+        """Gera uma resposta para o prompt fornecido"""
+        ...
+```
+
+### 2. Implementar Serviço para Google Gemini
+```python
+import google.generativeai as genai
+from .llm_service import LLMService
+
+class GeminiService(LLMService):
+    """Implementação do serviço LLM usando Google Gemini"""
+    
+    def __init__(self, api_key: str, model_name: str = "gemini-pro"):
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel(model_name)
+    
+    def generate_response(self, prompt: str) -> str:
+        """Gera uma resposta usando o modelo Gemini"""
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            # Log do erro (usando sistema de logging adequado)
+            print(f"Erro ao chamar Gemini API: {str(e)}")
+            raise
+```
+
+### 3. Implementar LLMPlayerAdapter Completo
+Atualize `gamer_agent/player_adapters.py`:
+```python
+from .player_input_adapter import PlayerInputAdapter
+from typing import Dict, Any
+
+class LLMPlayerAdapter(PlayerInputAdapter):
+    """Adapter para jogador IA (LLM)"""
+    
+    def __init__(self, renderer, llm_service, max_retries: int = 3):
+        self.renderer = renderer
+        self.llm_service = llm_service
+        self.max_retries = max_retries
+    
+    def get_decision(self, game_state) -> int:
+        """Obtém decisão da IA com tratamento robusto de erros"""
+        prompt = self.renderer.render(game_state)
+        
+        for attempt in range(self.max_retries):
+            try:
+                response = self.llm_service.generate_response(prompt)
+                return self._parse_llm_response(response, len(game_state.valid_choices))
+            except Exception as e:
+                if attempt == self.max_retries - 1:
+                    # Última tentativa falhou, usar fallback
+                    print(f"Erro após {self.max_retries} tentativas: {str(e)}")
+                    return self._fallback_decision(len(game_state.valid_choices))
+                print(f"Tentativa {attempt+1} falhou: {str(e)}. Tentando novamente...")
+        
+        # Este ponto não deve ser alcançado devido ao retorno no loop
+        return 0
+    
+    def _parse_llm_response(self, response: str, num_choices: int) -> int:
+        """Parseia resposta da LLM para obter índice de escolha com robustez"""
+        # 1. Primeiro, tenta encontrar números diretamente
+        import re
+        numbers = re.findall(r'\b\d+\b', response)
+        if numbers:
+            for num_str in numbers:
+                try:
+                    choice = int(num_str) - 1
+                    if 0 <= choice < num_choices:
+                        return choice
+                except ValueError:
+                    continue
+        
+        # 2. Tenta encontrar correspondência com texto das escolhas
+        response_lower = response.lower()
+        for i, choice in enumerate(game_state.valid_choices):
+            choice_text = choice["text"].lower()
+            # Verifica se o texto da escolha está na resposta
+            if choice_text in response_lower:
+                return i
+            
+            # Verifica variações comuns
+            if f"opção {i+1}" in response_lower:
+                return i
+            if f"alternativa {i+1}" in response_lower:
+                return i
+            if f"escolha {i+1}" in response_lower:
+                return i
+        
+        # 3. Tenta interpretar intenções
+        if "primeira" in response_lower or "1ª" in response_lower:
+            return 0
+        if "segunda" in response_lower or "2ª" in response_lower and num_choices > 1:
+            return 1
+        if "terceira" in response_lower or "3ª" in response_lower and num_choices > 2:
+            return 2
+        
+        # 4. Se nada funcionar, usar fallback
+        return self._fallback_decision(num_choices)
+    
+    def _fallback_decision(self, num_choices: int) -> int:
+        """Decisão de fallback quando não é possível parsear a resposta"""
+        import random
+        print("Usando decisão de fallback aleatória")
+        return random.randint(0, num_choices - 1)
+```
+
+### 4. Adicionar Tratamento de Erros Robusto
+```python
+class LLMPlayerAdapter(PlayerInputAdapter):
+    # ...
+    
+    def _handle_api_error(self, error: Exception) -> bool:
+        """Trata erros da API e determina se deve tentar novamente"""
+        error_str = str(error).lower()
+        
+        # Erros que valem a pena tentar novamente
+        retry_errors = [
+            "rate limit", "timeout", "connection error", 
+            "500", "502", "503", "504"
+        ]
+        
+        return any(err in error_str for err in retry_errors)
+```
+
+### 5. Implementar Testes de Integração
+Crie `tests/integration/test_llm_adapter.py`:
+```python
+import pytest
+from unittest.mock import MagicMock, patch
+from gamer_agent.player_adapters import LLMPlayerAdapter
+from gamer_agent.cockpit import GameStateDTO
+
+class MockLLMService:
+    def generate_response(self, prompt):
+        return "2"
+
+def test_llm_adapter_basic_decision():
+    """Testa decisão básica do LLM adapter"""
+    renderer = MagicMock()
+    llm_service = MockLLMService()
+    adapter = LLMPlayerAdapter(renderer, llm_service)
+    
+    # Criar estado de jogo de teste
+    game_state = GameStateDTO(
+        character_state={"health": 10, "stamina": 5},
+        current_page={"title": "Teste", "content": "Conteúdo de teste", "choices": []},
+        valid_choices=[
+            {"id": 1, "text": "Escolha 1"},
+            {"id": 2, "text": "Escolha 2"}
+        ]
+    )
+    
+    # Testar decisão
+    decision = adapter.get_decision(game_state)
+    assert decision == 1  # Porque o mock retorna "2"
+
+def test_llm_adapter_response_parsing():
+    """Testa diferentes formatos de resposta da LLM"""
+    renderer = MagicMock()
+    llm_service = MagicMock()
+    adapter = LLMPlayerAdapter(renderer, llm_service)
+    
+    # Criar estado de jogo de teste
+    game_state = GameStateDTO(
+        character_state={"health": 10, "stamina": 5},
+        current_page={"title": "Teste", "content": "Conteúdo de teste", "choices": []},
+        valid_choices=[
+            {"id": 1, "text": "Atacar"},
+            {"id": 2, "text": "Defender"},
+            {"id": 3, "text": "Fugir"}
+        ]
+    )
+    
+    # Testar diferentes respostas
+    test_cases = [
+        ("2", 1),
+        ("Escolho a opção 3", 2),
+        ("Vou defender", 1),
+        ("primeira opção", 0),
+        ("42", 0),  # Fallback para primeira opção
+        ("Não tenho certeza, talvez 2", 1)
+    ]
+    
+    for response, expected in test_cases:
+        llm_service.generate_response.return_value = response
+        assert adapter._parse_llm_response(response, 3) == expected
+
+@patch('google.generativeai.GenerativeModel.generate_content')
+def test_llm_adapter_error_handling(mock_generate):
+    """Testa tratamento de erros da API"""
+    mock_generate.side_effect = Exception("Rate limit exceeded")
+    
+    renderer = MagicMock()
+    llm_service = MagicMock()
+    llm_service.generate_response.side_effect = Exception("Rate limit exceeded")
+    
+    adapter = LLMPlayerAdapter(renderer, llm_service, max_retries=2)
+    
+    # Criar estado de jogo de teste
+    game_state = GameStateDTO(
+        character_state={"health": 10, "stamina": 5},
+        current_page={"title": "Teste", "content": "Conteúdo de teste", "choices": []},
+        valid_choices=[{"id": 1, "text": "Teste"}]
+    )
+    
+    # Deve usar fallback após tentativas
+    decision = adapter.get_decision(game_state)
+    assert decision == 0  # Fallback para primeira opção
+```
+
+### 6. Atualizar Documentação
+Adicione ao README.md:
+```markdown
+## Modo IA (LLM)
+
+O jogo pode ser jogado automaticamente usando um modelo de linguagem grande (LLM):
+
+```bash
+python main.py --player llm --api-key SUA_CHAVE_API
+```
+
+### Configuração
+
+1. Obtenha uma chave API do Google AI Studio
+2. Instale as dependências: `pip install google-generativeai`
+3. Execute o jogo com a chave API
+
+### Como Funciona
+
+1. O sistema formata o estado atual do jogo como um prompt
+2. Envia o prompt para o modelo Gemini
+3. Parseia a resposta para obter a escolha
+4. Executa a escolha selecionada
+
+O sistema inclui tratamento robusto de erros e estratégias de fallback para garantir jogabilidade contínua mesmo com respostas imperfeitas da LLM.
+```
+
+## Critérios de Aceitação
+- [ ] Funciona com API real do Gemini
+- [ ] Trata falhas de conexão e respostas inválidas
+- [ ] Implementa estratégias de retry para erros transitórios
+- [ ] Inclui parsing robusto de respostas da LLM
+- [ ] Possui fallbacks adequados para situações de erro
+- [ ] Passa em todos os testes de integração
+- [ ] Documentação clara de configuração e uso
+
+## Exemplo de Implementação Completa
+```python
+# gamer_agent/player_adapters.py
+from .player_input_adapter import PlayerInputAdapter
+from typing import Dict, Any
+
+class LLMPlayerAdapter(PlayerInputAdapter):
+    """Adapter para jogador IA (LLM) com tratamento robusto de erros"""
+    
+    def __init__(self, renderer, llm_service, max_retries: int = 3):
+        self.renderer = renderer
+        self.llm_service = llm_service
+        self.max_retries = max_retries
+    
+    def get_decision(self, game_state) -> int:
+        """Obtém decisão da IA com tratamento robusto de erros"""
+        prompt = self.renderer.render(game_state)
+        
+        for attempt in range(self.max_retries):
+            try:
+                response = self.llm_service.generate_response(prompt)
+                return self._parse_llm_response(response, len(game_state.valid_choices))
+            except Exception as e:
+                if self._should_retry(e, attempt):
+                    continue
+                # Se não deve tentar novamente, usar fallback
+                print(f"Erro final após {attempt+1} tentativas: {str(e)}")
+                return self._fallback_decision(len(game_state.valid_choices))
+        
+        # Este ponto não deve ser alcançado devido ao retorno no loop
+        return self._fallback_decision(len(game_state.valid_choices))
+    
+    def _should_retry(self, error: Exception, attempt: int) -> bool:
+        """Determina se deve tentar novamente com base no erro"""
+        error_str = str(error).lower()
+        
+        # Erros que valem a pena tentar novamente (transitórios)
+        retry_errors = [
+            "rate limit", "timeout", "connection error", 
+            "500", "502", "503", "504", "deadline exceeded"
+        ]
+        
+        can_retry = any(err in error_str for err in retry_errors)
+        has_attempts_left = attempt < self.max_retries - 1
+        
+        if can_retry and has_attempts_left:
+            print(f"Tentativa {attempt+1} falhou com erro transitório: {str(error)}. Tentando novamente...")
+            return True
+        return False
+    
+    def _parse_llm_response(self, response: str, num_choices: int) -> int:
+        """Parseia resposta da LLM para obter índice de escolha com robustez"""
+        # 1. Primeiro, tenta encontrar números diretamente
+        import re
+        numbers = re.findall(r'\b\d+\b', response)
+        if numbers:
+            for num_str in numbers:
+                try:
+                    choice = int(num_str) - 1
+                    if 0 <= choice < num_choices:
+                        return choice
+                except ValueError:
+                    continue
+        
+        # 2. Tenta encontrar correspondência com texto das escolhas
+        response_lower = response.lower()
+        for i, choice in enumerate(game_state.valid_choices):
+            choice_text = choice["text"].lower()
+            # Verifica se o texto da escolha está na resposta
+            if choice_text in response_lower:
+                return i
+            
+            # Verifica variações comuns
+            if f"opção {i+1}" in response_lower:
+                return i
+            if f"alternativa {i+1}" in response_lower:
+                return i
+            if f"escolha {i+1}" in response_lower:
+                return i
+        
+        # 3. Tenta interpretar intenções
+        if "primeira" in response_lower or "1ª" in response_lower:
+            return 0
+        if "segunda" in response_lower or "2ª" in response_lower and num_choices > 1:
+            return 1
+        if "terceira" in response_lower or "3ª" in response_lower and num_choices > 2:
+            return 2
+        
+        # 4. Se nada funcionar, usar fallback
+        return self._fallback_decision(num_choices)
+    
+    def _fallback_decision(self, num_choices: int) -> int:
+        """Decisão de fallback quando não é possível parsear a resposta"""
+        import random
+        print(f"⚠️ Não foi possível interpretar a resposta da LLM. Usando escolha aleatória (1-{num_choices})")
+        return random.randint(0, num_choices - 1)
+```
+
+## Armadilhas Comuns a Evitar
+- **Não faça chamadas diretas sem tratamento de erros**: APIs externas são falhas
+- **Não assuma que a resposta será sempre válida**: Implemente parsing robusto
+- **Não ignore limites de taxa (rate limits)**: Adicione lógica de retry com backoff
+- **Não hardcode o modelo LLM**: Permita configuração flexível
+- **Não esqueça de tratar custos**: Chamadas a LLMs podem ser caras
+- **Não ignore a latência**: Considere como a espera pela API afeta a experiência
+
+## Notas Adicionais
+Este componente é crítico para a funcionalidade prometida do projeto. A implementação segue padrões de resiliência comuns em sistemas que dependem de APIs externas: retry com backoff, fallbacks robustos e tratamento de erros granular. O parsing flexível de respostas é particularmente importante, já que as LLMs podem responder de formas imprevisíveis.
+
+---
