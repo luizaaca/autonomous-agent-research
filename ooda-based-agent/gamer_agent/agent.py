@@ -1,10 +1,10 @@
 from character import Character
 from cockpit import Cockpit
 from player_strategy_interface import PlayerStrategy
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 
 class Agent:
-    def __init__(self, game_repository: Dict[int, Dict], player_input_adapter: PlayerStrategy, debug_mode: bool = False):
+    def __init__(self, game_repository: Dict[int, Dict], player_input_adapter: PlayerStrategy, debug: bool = False):
         """
         Inicializa o Agent com arquitetura PlayerInputStrategy v1.2.
         
@@ -13,7 +13,7 @@ class Agent:
             game_repository: Dicionário com todas as páginas do jogo
             player_input_adapter: Adapter para captura de entrada do jogador
         """
-        self._debug_mode = debug_mode
+        self._debug_mode = debug
         character = Character() 
         self.game_data = game_repository
         self.combat_status = {}
@@ -78,7 +78,7 @@ class Agent:
         
         return True
 
-    def _decide(self, choices):
+    def _decide(self, choices) -> Tuple[int,str]:
         """
         Implementa Circuit Breaker Pattern e validação de regras conforme seção 5.4.
         
@@ -90,15 +90,7 @@ class Agent:
         """
         
         if not self._validate_choices(choices):
-            self.failed_choices_count += 1
-            # Adicionar erro ao histórico do character para contexto futuro
-            if hasattr(self.cockpit.character, 'add_to_history'):
-                self.cockpit.character.add_to_history(
-                    page_number=self.cockpit.current_page_number,
-                    page_text="[SYSTEM]",
-                    choice_made={"error": "Lista de choices inválida."},
-                    choice_index=0
-                )
+            self.failed_choices_count += 1            
             print("ERRO CRÍTICO: Lista de choices inválida.")
             raise Exception("Invalid choices format")
         
@@ -119,7 +111,7 @@ class Agent:
             current_page = self.game_data.get(current_page_number, {})
 
             # Usar PlayerInputStrategy para obter choice_index (base 1)
-            choice_index = self.player_input_adapter.get_decision(choices, character_data, history, current_page, current_page_number)
+            choice_index, reason = self.player_input_adapter.get_decision(choices, character_data, history, current_page, current_page_number)
 
             # Conversão para base 0 e obtenção do choice dict
             chosen_choice = choices[choice_index - 1]
@@ -131,14 +123,15 @@ class Agent:
                 # SUCCESS: Reset circuit breaker counter
                 self.failed_choices_count = 0
                 
-                # Exibir escolha formatada
-                print("🎯 ESCOLHA SELECIONADA E VALIDADA:")
-                print("=" * 50)
-                for key, value in chosen_choice.items():
-                    print(f"  {key}: {value}")
-                print("=" * 50)
+                if self._debug_mode:
+                    # Exibir escolha formatada
+                    print("🎯 ESCOLHA SELECIONADA E VALIDADA:")
+                    print("=" * 50)
+                    for key, value in chosen_choice.items():
+                        print(f"  {key}: {value}")
+                    print("=" * 50)
                 
-                return chosen_choice
+                return chosen_choice, reason
             else:
                 # FAILURE: Increment circuit breaker counter
                 self.failed_choices_count += 1
@@ -146,17 +139,7 @@ class Agent:
                 # Choice inválido - adicionar feedback de erro ao histórico
                 error_message = f"[SYSTEM ERROR] {validation_result['error_message']} (Falha {self.failed_choices_count}/{self.max_choice_retries})"
                 print(f"❌ {error_message}")
-                
-                # Adicionar erro ao histórico do character para contexto futuro
-                if hasattr(self.cockpit.character, 'add_to_history'):
-                    # Usar método moderno se disponível
-                    self.cockpit.character.add_to_history(
-                        page_number=self.cockpit.current_page_number,
-                        page_text="[SYSTEM]",
-                        choice_made={"error": error_message},
-                        choice_index=choice_index
-                    )
-                
+                                
                 # Verificar se atingiu limite do circuit breaker
                 if self.failed_choices_count >= self.max_choice_retries:
                     print("🚨 Circuit Breaker será ativado na próxima tentativa")
@@ -514,7 +497,7 @@ class Agent:
             self._orient(page_text)
             
             # 3. Decide (usando PlayerInputStrategy v1.2)
-            chosen_action = self._decide(choices)
+            chosen_action, reason = self._decide(choices)
             
             # CIRCUIT BREAKER CHECK: Se _decide retornar None, encerrar execução
             if chosen_action is None:
@@ -556,9 +539,9 @@ class Agent:
                 if choice == chosen_action:
                     choice_index = i
                     break
-            
-            self._record_choice_in_history(page_text, chosen_action, choice_index, outcome)
-            
+
+            self._record_choice_in_history(page_text, chosen_action, reason, choice_index, outcome)
+
             # Navegação para a próxima página
             self.cockpit.set_current_page(next_page)        
 
@@ -592,7 +575,7 @@ class Agent:
         # Futuramente, poderia usar um LLM para extrair contexto do page_text
         return
 
-    def _record_choice_in_history(self, page_text, chosen_choice, choice_index=None, outcome=None):
+    def _record_choice_in_history(self, page_text, chosen_choice, reason, choice_index=None, outcome=None):
         """
         Registra a escolha feita no histórico detalhado usando Character.add_to_history().
         
@@ -608,18 +591,19 @@ class Agent:
             choice_with_outcome['executed_outcome'] = outcome
         
         # Adicionar ao histórico detalhado via Character
-        self.cockpit.character.add_to_history(
+        self.cockpit.add_to_history(
             page_number=self.cockpit.current_page_number,
             page_text=self._smart_truncate_text(page_text, 200),
             choice_made=choice_with_outcome,
-            choice_index=choice_index
+            choice_index=choice_index,
+            reason=reason
         )
-        
-        print("✅ ESCOLHA REGISTRADA NO HISTÓRICO DETALHADO")
-        print(f"  Página: {self.cockpit.current_page_number}")
-        print(f"  Escolha: {chosen_choice.get('text', str(chosen_choice)[:50])}")
-        if outcome:
-            print(f"  Resultado: {outcome[:100]}...")
+        if self._debug_mode:
+            print("✅ ESCOLHA REGISTRADA NO HISTÓRICO DETALHADO")
+            print(f"  Página: {self.cockpit.current_page_number}")
+            print(f"  Escolha: {chosen_choice.get('text', str(chosen_choice)[:50])}")
+            if outcome:
+                print(f"  Resultado: {outcome[:100]}...")
     
     def _log_turn_summary(self, chosen_choice: Dict[str, Any], choice_index: int, outcome: str):
         """

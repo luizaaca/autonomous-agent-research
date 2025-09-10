@@ -306,86 +306,8 @@ INSTRUCTIONS:
         }
         
         return json.dumps(history_json, indent=2, ensure_ascii=False)
-    
-    def _format_character_status_for_prompt(self) -> str:
-        """
-        Formata o status do personagem como string para uso em prompts.
-        Mantém compatibilidade com generate_prompt().
         
-        Returns:
-            String formatada com o status do personagem
-        """
-        status_data = self.render_character_status()
-        
-        # Informações básicas
-        char_info = status_data["character_info"]
-        info_section = f"""
-📋 CHARACTER INFO
-├─ Name: {char_info["name"]}
-├─ Occupation: {char_info["occupation"]}
-└─ Age: {char_info["age"]}
-"""
-        
-        # Status de saúde
-        health = status_data["health_status"]
-        health_section = f"""
-❤️  HEALTH STATUS
-└─ {health["icon"]} {health["current_level"]} (Damage: {health["damage_taken"]})
-"""
-        
-        # Recursos
-        resources = status_data["resources"]
-        resources_section = f"""
-⚡ RESOURCES
-├─ Luck: {resources["luck"]["current"]}/{resources["luck"]["starting"]}
-├─ Magic Points: {resources["magic"]["current"]}/{resources["magic"]["starting"]}
-└─ Movement: {resources["movement"]}
-"""
-        
-        # Características
-        characteristics = status_data["characteristics"]
-        char_section = "📊 CHARACTERISTICS\n"
-        for char_name, char_data in characteristics.items():
-            char_section += f"├─ {char_name}: {char_data['full']} (Half: {char_data['half']})\n"
-        char_section = char_section.rstrip('\n')
-        
-        # Habilidades
-        skills = status_data["skills"]
-        skills_section = "🎯 KEY SKILLS\n"
-        
-        # Habilidades comuns
-        for skill_name, skill_data in skills["common"].items():
-            skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
-        
-        # Habilidades de combate
-        for skill_name, skill_data in skills["combat"].items():
-            skills_section += f"├─ {skill_name}: {skill_data['full']}% (Half: {skill_data['half']}%)\n"
-        
-        skills_section = skills_section.rstrip('\n')
-        
-        # Inventário
-        inventory = status_data["inventory"]
-        inventory_section = "🎒 INVENTORY\n"
-        if inventory['equipment']:
-            inventory_section += "├─ Equipment: " + ", ".join(inventory['equipment']) + "\n"
-        if inventory['weapons']:
-            inventory_section += "├─ Weapons: " + ", ".join(inventory['weapons']) + "\n"
-        if not inventory['equipment'] and not inventory['weapons']:
-            inventory_section += "└─ Empty\n"
-        inventory_section = inventory_section.rstrip('\n')
-        
-        # Modificadores
-        modifiers = status_data["modifiers"]
-        modifiers_section = ""
-        if modifiers:
-            modifiers_section = "⚠️  ACTIVE MODIFIERS\n"
-            for mod in modifiers:
-                modifiers_section += f"├─ {mod.get('skill', 'General')}: {mod.get('type', 'Unknown')} ({mod.get('duration', 'Unknown')})\n"
-            modifiers_section = modifiers_section.rstrip('\n')
-        
-        return f"{info_section}{health_section}{resources_section}{char_section}\n{skills_section}\n{inventory_section}\n{modifiers_section}".strip()
-
-    def add_to_history(self, page_number: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None):
+    def add_to_history(self, page_number: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None, reason: str = None):
         """
         Adiciona uma entrada ao histórico de decisões.
         
@@ -395,7 +317,7 @@ INSTRUCTIONS:
             choice_made: Objeto choice completo que foi escolhido
             choice_index: Índice da escolha (opcional)
         """
-        self.character.add_to_history(page_number, page_text, choice_made, choice_index)
+        self.character.add_to_history(page_number, page_text, choice_made, choice_index, reason)
 
         # Manter apenas as últimas 30 entradas para evitar overflow
         history = self.character.get_history()
@@ -407,33 +329,6 @@ INSTRUCTIONS:
                     entry['page_number'],
                     entry['page_text'],
                     entry['choice_made'],
-                    entry.get('choice_index')
+                    entry.get('choice_index'),
+                    entry.get('reason')
                 )
-    
-    def generate_prompt(self) -> str:
-        """
-        Gera o prompt completo para o LLM.
-        
-        Returns:
-            String formatada com todo o cockpit/dashboard
-        """
-        sections = [
-            self.render_header(),
-            "",
-            self._format_character_status_for_prompt(),
-            "",
-            self.render_current_situation(),
-            "",
-            self.render_history(),
-            "",
-            "═══════════════════════════════════════════════════════════════════════════════",
-            "🤖 YOUR DECISION:",
-            "Choose your action by responding with the complete choice object from the list above.",
-            "Example: {'text': 'Ask about the bruise', 'goto': 14}",
-            "Or: {'roll': 'DEX', 'results': {'5': {'goto': 34}, '4': {'goto': 78}}}",
-            "═══════════════════════════════════════════════════════════════════════════════"
-        ]
-        
-        return "\n".join(sections)
-
-

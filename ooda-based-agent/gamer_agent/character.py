@@ -135,7 +135,6 @@ class Character:
             "inventory": {"equipment": [], "weapons": []},
             "page_history": []
         }
-
     
     # Propriedades para acesso fácil aos dados principais
     @property
@@ -167,31 +166,6 @@ class Character:
             Dicionário completo da ficha do personagem
         """
         return self._sheet
-    
-    def get_game_backstory(self) -> str:
-        """
-        Gera backstory contextualizado para o jogo baseado na ocupação.
-        
-        Substitui a lógica de GameInstructions.get_backstory() centralizando
-        a responsabilidade de backstory na classe Character, que é quem
-        deve conhecer seu contexto de jogo.
-        
-        Returns:
-            String com backstory completo incluindo contexto do jogo e ocupação
-        """
-        base_context = "Você é um agente OODA baseado em IA navegando por um livro-jogo de investigação policial."
-        
-        occupation_context = {
-            "Police Officer": "Como policial experiente, você tem autoridade e conhecimento sobre procedimentos legais.",
-            "Social Worker": "Como assistente social, você entende comportamento humano e tem habilidades de comunicação.",
-            "Nurse": "Como enfermeiro, você tem conhecimento médico e experiência em situações de crise."
-        }
-        
-        occupation_specific = occupation_context.get(self.occupation, "Você deve usar suas habilidades únicas")
-        
-        game_objective = "Seu objetivo é resolver o mistério, tomar decisões estratégicas e manter seu personagem vivo. Use suas habilidades de raciocínio, análise e tomada de decisão para progredir na história."
-        
-        return f"{base_context} {occupation_specific} {game_objective}"
     
     def get_characteristic(self, char_name: str) -> Dict[str, int]:
         """
@@ -235,6 +209,27 @@ class Character:
         
         return self._sheet["skills"][skill_type][skill_name].copy()
     
+    def get_all_skills(self) -> Dict[str,int]:
+        """
+        Retorna todas as habilidades do personagem, independentemente do tipo.
+        
+        As habilidades são coletadas dos dicionários 'common', 'combat' e 'expert'
+        e retornadas em um único dicionário onde a chave é o nome da habilidade
+        e o valor é um dicionário com 'full' e 'half'.
+        
+        Returns:
+            Dicionário com todas as habilidades do personagem
+        """
+        all_skills = {}
+        
+        # Iterar sobre todos os tipos de habilidades
+        for skill_type in ["common", "combat", "expert"]:
+            if skill_type in self._sheet["skills"]:
+                # Copiar habilidades do tipo atual para o dicionário geral
+                all_skills.update(self._sheet["skills"][skill_type].copy())
+
+        return all_skills
+
     def get_luck(self) -> Dict[str, int]:
         """
         Obtém os valores atuais e iniciais de sorte.
@@ -420,7 +415,7 @@ class Character:
         self._sheet["resources"]["magic_pts"]["starting"] = starting_value
         self._sheet["resources"]["magic_pts"]["current"] = starting_value
     
-    # Métodos melhorados de validação
+    # Métodos de validação
     def validate_characteristic_value(self, value: int) -> int:
         """
         Valida e corrige um valor de característica.
@@ -1525,7 +1520,7 @@ class Character:
                 f"Magic: {magic['current']}/{magic['starting']}")
     
     # Métodos de gerenciamento de histórico
-    def add_to_history(self, page_number: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None):
+    def add_to_history(self, page_number: int, page_text: str, choice_made: Dict[str, Any], choice_index: int = None, reason: str = None):
         """
         Adiciona uma entrada ao histórico de decisões.
         
@@ -1539,7 +1534,8 @@ class Character:
             'page_number': page_number,
             'page_text': page_text,
             'choice_made': choice_made,
-            'choice_index': choice_index
+            'choice_index': choice_index,
+            'reason': reason
         }
         
         self._sheet['page_history'].append(history_entry)
@@ -1556,25 +1552,4 @@ class Character:
     def clear_history(self):
         """Limpa o histórico de decisões."""
         self._sheet['page_history'] = []
-    
-    def get_all_skills(self) -> Dict[str,int]:
-        """
-        Retorna todas as habilidades do personagem, independentemente do tipo.
         
-        As habilidades são coletadas dos dicionários 'common', 'combat' e 'expert'
-        e retornadas em um único dicionário onde a chave é o nome da habilidade
-        e o valor é um dicionário com 'full' e 'half'.
-        
-        Returns:
-            Dicionário com todas as habilidades do personagem
-        """
-        all_skills = {}
-        
-        # Iterar sobre todos os tipos de habilidades
-        for skill_type in ["common", "combat", "expert"]:
-            if skill_type in self._sheet["skills"]:
-                # Copiar habilidades do tipo atual para o dicionário geral
-                all_skills.update(self._sheet["skills"][skill_type].copy())
-
-        return all_skills
-

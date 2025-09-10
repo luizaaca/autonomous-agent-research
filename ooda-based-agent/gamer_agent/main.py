@@ -70,29 +70,23 @@ Exemplos:
         print(f"[INFO] Configurando {args.player} player adapter...")
         
         if args.player == 'human':
-            player_adapter = HumanPlayerAdapter()
+            player_adapter = HumanPlayerAdapter(debug=args.debug)
             print("[INFO] Modo humano: Use o console para interagir")
             
         elif args.player == 'llm':
-            # api_key = os.getenv("GEMINI_API_KEY")
-            # if not api_key:
-            #     print("[ERROR] GEMINI_API_KEY não encontrada nas variáveis de ambiente")
-            #     print("        Configure a chave da API antes de usar o modo LLM:")
-            #     print("        export GEMINI_API_KEY='sua_chave_aqui'")
-            #     sys.exit(1)
-            api_key = "DUMMY_KEY_FOR_TESTING"  # Substitua pela sua chave real ou use variável de ambiente
-            player_adapter = LLMPlayerAdapter()
+            player_adapter = LLMPlayerAdapter(debug=args.debug)
             print("[INFO] Modo LLM: IA tomará decisões via API")
             
         else:  # default: demo
-            player_adapter = DemoPlayerAdapter()
+            player_adapter = DemoPlayerAdapter(debug=args.debug)
             print("[INFO] Modo demo: Execução automática para demonstração")
         
         # Instanciar Agent com dependency injection (arquitetura v1.2)
         print("[INFO] Inicializando Agent com nova arquitetura PlayerInputAdapter...")
         agent = Agent(
             game_repository=game_repo,
-            player_input_adapter=player_adapter
+            player_input_adapter=player_adapter,
+            debug=args.debug
         )
         
         # Iniciar o game loop (ciclo OODA)

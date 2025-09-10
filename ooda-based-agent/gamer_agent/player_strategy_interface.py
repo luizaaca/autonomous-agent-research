@@ -7,7 +7,7 @@ decisão da captura de entrada.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 
 class PlayerStrategy(ABC):
@@ -18,7 +18,7 @@ class PlayerStrategy(ABC):
     """
     
     @abstractmethod
-    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any], history: List[Dict[str, Any]], current_page_data: Dict[str, Any], current_page_number: int) -> int:
+    def get_decision(self, available_choices: List[Dict[str, Any]], character_data: Dict[str, Any], history: List[Dict[str, Any]], current_page_data: Dict[str, Any], current_page_number: int) -> Tuple[int, str]:
         """
         Obtém o índice da escolha selecionada pelo jogador.
 

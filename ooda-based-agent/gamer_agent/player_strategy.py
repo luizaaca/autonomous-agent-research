@@ -12,9 +12,12 @@ from rich.table import Table
 from rich.columns import Columns
 from rich.text import Text
 from rich.console import Console
+from typing import Tuple, Optional
+import json
 import os, re
 import random
 import requests
+
 
 class RenderConsole:
     """
@@ -22,8 +25,9 @@ class RenderConsole:
     utilizando a biblioteca Rich para criar um "cockpit" informativo no console.
     """
 
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         self.console = Console()
+        self._debug = debug
 
     def render_game_screen(
         self,
@@ -299,9 +303,9 @@ class DemoPlayerAdapter(PlayerStrategy):
         Args:
             debug: Se True, exibe informações de debug durante a decisão.
         """
-        self.debug = debug
-        self.renderer = RenderConsole()
+        self._debug = debug
         self._last_decision_reason = ""
+        self.renderer = RenderConsole(debug)
 
     def get_decision(
         self,
@@ -310,7 +314,7 @@ class DemoPlayerAdapter(PlayerStrategy):
         history: List[Dict[str, Any]],
         current_page_data: Dict[str, Any],
         current_page_number: int,
-    ) -> int:
+    ) -> Tuple[int, str]:
         """
         Toma decisão automática baseada na lógica internalizada do DefaultDecisionController.
 
@@ -322,7 +326,7 @@ class DemoPlayerAdapter(PlayerStrategy):
         Returns:
             Índice (base 1) da escolha selecionada
         """
-        if self.debug:
+        if self._debug:
             print(f"[DemoPlayerAdapter] Processando {len(available_choices)} choices")
 
         self.renderer.render_game_screen(
@@ -354,7 +358,7 @@ class DemoPlayerAdapter(PlayerStrategy):
             f"[DemoPlayerAdapter] Selecionada choice {selected_index + 1}: {choice_text}"
         )
 
-        return selected_index + 1
+        return selected_index + 1, self._last_decision_reason
 
 
 class HumanPlayerAdapter(PlayerStrategy):
@@ -363,6 +367,11 @@ class HumanPlayerAdapter(PlayerStrategy):
     Implementa input loop com validação para capturar escolhas do usuário.
     """
 
+    def __init__(self, debug: bool = False):
+        self.console = Console()
+        self._debug = debug
+        self.renderer = RenderConsole(debug)
+
     def get_decision(
         self,
         available_choices: List[Dict[str, Any]],
@@ -370,7 +379,7 @@ class HumanPlayerAdapter(PlayerStrategy):
         history: List[Dict[str, Any]],
         current_page_data: Dict[str, Any],
         current_page_number: int,
-    ) -> int:
+    ) -> Tuple[int, str]:
         """
         Captura decisão do jogador humano via console input.
 
@@ -386,8 +395,8 @@ class HumanPlayerAdapter(PlayerStrategy):
         # Loop de input com validação
         while True:
             try:
-                renderer = RenderConsole()
-                renderer.render_game_screen(
+                self.renderer = RenderConsole()
+                self.renderer.render_game_screen(
                     choices=available_choices,
                     character_data=character_data,
                     history=history,
@@ -398,20 +407,20 @@ class HumanPlayerAdapter(PlayerStrategy):
                     f"\nDigite sua escolha (1-{len(available_choices)}): "
                 ).strip()
 
-                # Verificar se é um número
                 choice_index = int(user_input)
 
-                # Verificar se está no range válido
                 if 1 <= choice_index <= len(available_choices):
                     print(
                         f"\n✅ Escolha selecionada: [{choice_index}] {self._format_choice_for_display(available_choices[choice_index - 1])}"
                     )
-                    return choice_index
+                    return (
+                        choice_index,
+                        "Decisão tomada pelo jogador humano via console.",
+                    )
                 else:
                     print(
                         f"❌ Erro: Digite um número entre 1 e {len(available_choices)}"
                     )
-
             except ValueError:
                 print("❌ Erro: Digite apenas números")
             except KeyboardInterrupt:
@@ -550,21 +559,25 @@ class HumanPlayerAdapter(PlayerStrategy):
 
         return "Escolha disponível"
 
+
 import openai
+
+
 class LLMPlayerAdapter(PlayerStrategy):
     """
     Adapter para IA via API de LLM.
     Envia o estado do jogo para uma API de LLM e processa a resposta.
     """
 
-    def __init__(self, api_key: str = None, model: str = "gemini-pro"):
+    def __init__(self, debug: bool = False):
         """
         Inicializa o LLMPlayerAdapter.
 
         Args:
             api_key: Chave da API do LLM (pode ser None para usar variável de ambiente)
             model: Modelo a ser usado (default: gemini-pro)
-        """        
+        """
+        self._debug = debug
         self.console = Console()
 
     def get_decision(
@@ -574,7 +587,7 @@ class LLMPlayerAdapter(PlayerStrategy):
         history: List[Dict[str, Any]],
         current_page_data: Dict[str, Any],
         current_page_number: int,
-    ) -> int:
+    ) -> Tuple[int, str]:
         """
         Obtém decisão de uma API de LLM.
 
@@ -584,7 +597,7 @@ class LLMPlayerAdapter(PlayerStrategy):
 
         Returns:
             Índice (base 1) da escolha selecionada
-        """       
+        """
 
         try:
             # Loop de input com validação
@@ -593,7 +606,7 @@ class LLMPlayerAdapter(PlayerStrategy):
                 counter += 1
                 if counter > 3:
                     raise Exception("Número máximo de tentativas excedido")
-                
+
                 prompt = self._build_llm_prompt(
                     choices=available_choices,
                     character_data=character_data,
@@ -602,58 +615,164 @@ class LLMPlayerAdapter(PlayerStrategy):
                     current_page_number=current_page_number,
                 )
                 self.console.clear()
-                print(f"[LLMPlayerAdapter] Enviando prompt para LLM (tamanho {len(prompt)} caracteres)")                
+                if self._debug:
+                    self.console.print(
+                        f"[LLMPlayerAdapter] Enviando prompt para LLM (tamanho {len(prompt)} caracteres)"
+                    )
                 self.console.print(prompt)
-                self.console.print("\n" + "-"*50 + "\n")
-                
-                llm_response_content = self._call_openrouter_api(prompt)
-                print(f"[LLMPlayerAdapter] Resposta do LLM: '{llm_response_content}'")
+                self.console.print("\n" + "-" * 50 + "\n")
 
-                user_input = llm_response_content
-                #extrair número resposta, formato: {'choice': N, 'reason': '...'}
-                match = re.search(r"'choice'\s*:\s*(\d+)", user_input)
-                if match:
-                    user_input = match.group(1)
-                
+                choice, reason = self._call_openrouter_api(prompt)
+
+                user_input = choice
+
                 # Verificar se é um número
                 choice_index = int(user_input)
-
-                # Verificar se está no range válido
-                if 1 <= choice_index <= len(available_choices):
-                    print(
-                        f"\n✅ Escolha selecionada: [{choice_index}] {self._format_choice_for_display(available_choices[choice_index - 1])}"
-                    )
-                    return choice_index
-                else:
-                    print(
-                        f"❌ Erro: Digite um número entre 1 e {len(available_choices)}"
-                    )
+                return choice_index, reason
         except Exception as e:
-            print(f"[LLMPlayerAdapter] Erro na API: {e} - usando fallback")
+            print(f"[LLMPlayerAdapter] Erro na API: {e}")
             raise e
 
-    def _call_openrouter_api(self, prompt: str) -> str:
+    def _call_openrouter_api(self, prompt: str) -> Tuple[int, str]:
         api_key = os.getenv("OPENROUTER_API_KEY")
+
         if not api_key:
             raise Exception("OPENROUTER_API_KEY não configurada no ambiente.")
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
+
+        sys_prompt = """### PAPEL E OBJETIVO
+Você é um agente de IA focado em tomar decisões estratégicas em um livro-jogo. Seu objetivo é analisar o cenário apresentado e escolher a melhor ação possível com base nos dados fornecidos, justificando sua escolha de forma lógica.
+
+### DADOS DE ENTRADA
+Você receberá as seguintes informações:
+1.  **PAGINA ATUAL**: O texto descritivo da situação corrente.
+2.  **ESTADO ATUAL DO PERSONAGEM**: Atributos, inventário e condição do personagem.
+3.  **HISTÓRICO DE DECISÕES**: Ações tomadas anteriormente.
+4.  **ESCOLHAS DISPONÍVEIS**: Uma lista numerada de ações que você pode tomar.
+
+### TAREFA
+1.  Analise rigorosamente todos os DADOS DE ENTRADA.
+2.  Avalie as ESCOLHAS DISPONÍVEIS em relação ao ESTADO ATUAL DO PERSONAGEM e ao contexto da PAGINA ATUAL.
+3.  Selecione o número da escolha que maximiza as chances de sucesso ou que seja mais coerente com os objetivos do personagem.
+4.  Formule uma justificativa concisa e lógica para a escolha feita.
+
+### FORMATO DE SAÍDA OBRIGATÓRIO
+Sua resposta deve ser um **bloco de código Markdown** contendo um único objeto JSON válido. Não inclua nenhum outro texto fora do bloco de código. O objeto JSON deve ter duas chaves:
+- `choice`: um número inteiro (integer).
+- `reason`: uma string (string) com a justificativa.
+
+**EXEMPLO DE SAÍDA VÁLIDA:**
+```json
+{
+  "choice": 2,
+  "reason": "A escolha de usar o item 'chave de ferro' é a mais lógica, pois a descrição da página menciona uma 'porta trancada' e a chave está no meu inventário. Tentar forçar a porta poderia causar dano ou alertar inimigos."
+}
+```
+"""
+
         payload = {
-            "model": "openai/gpt-3.5-turbo",  # ou outro modelo suportado
+            "model": "openai/gpt-5",  # ou outro modelo suportado
             "messages": [
-                {"role": "system", "content": "Você é um agente inteligente jogando um RPG baseado em texto. Analise o estado atual do jogo e escolha a melhor ação com base em seus attributos e dados. Você deve responder com o número da escolha (1-N) e o motivo que lhe induziu à escolha. Use o modelo JSON: {'choice': N, 'reason': '...'}"},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": prompt},
             ],
-            "temperature": 0.7,
-            "max_tokens": 5
+            "temperature": 0.2,
         }
+
+        if self._debug:
+            print(f"[LLMPlayerAdapter] Enviando payload para API: {payload}")
+
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+        choice, reason = self._process_llm_response(
+            response.json()["choices"][0]["message"]["content"]
+        )
+
+        if self._debug:
+            print(
+                f"[LLMPlayerAdapter] Resposta da API: {response.status_code} - {response.text}"
+            )
+            print(
+                f"[LLMPlayerAdapter] Resposta processada: choice={choice}, reason={reason}"
+            )
+
+        if choice is None or reason is None:
+            raise Exception("Resposta do LLM inválida ou mal formatada.")
+
+        return (choice, reason)
+
+    def _process_llm_response(self, raw_response: str) -> Tuple[int, str]:
+        """
+        Processa a resposta bruta do LLM para extrair o número da escolha e a razão.
+
+        A função espera encontrar um bloco de código Markdown com um JSON válido dentro.
+        Ex:
+        ```json
+        {
+        "choice": 1,
+        "reason": "Esta é a melhor escolha por causa de X."
+        }
+        ```
+
+        Args:
+            raw_response: A string de resposta completa retornada pela API do LLM.
+
+        Returns:
+            Uma tupla contendo (choice_number, reason_text) se o processamento for bem-sucedido.
+            Retorna None se o bloco JSON não for encontrado, for inválido ou se as chaves
+            esperadas não estiverem presentes.
+        """
+        # 1. Extrair o conteúdo do bloco de código JSON usando expressão regular
+        #    - re.DOTALL faz com que '.' também corresponda a quebras de linha.
+        match = re.search(r"```json\s*(\{.*?\})\s*```", raw_response, re.DOTALL)
+
+        if not match:
+            print(
+                f"ERRO DE PROCESSAMENTO: Bloco de código JSON não encontrado na resposta.\nResposta recebida: {raw_response}"
+            )
+            return None
+
+        json_string = match.group(1)
+
+        # 2. Tentar converter (parse) a string extraída em um dicionário Python
+        try:
+            data = json.loads(json_string)
+
+            # 3. Validar a estrutura do dicionário
+            if not isinstance(data, dict):
+                print(
+                    f"ERRO DE PROCESSAMENTO: JSON extraído não é um objeto (dicionário).\nJSON: {json_string}"
+                )
+                return None
+
+            choice = data.get("choice")
+            reason = data.get("reason")
+
+            # Validar se as chaves existem e têm os tipos corretos
+            if not isinstance(choice, int):
+                print(
+                    f"ERRO DE PROCESSAMENTO: Chave 'choice' ausente ou não é um inteiro.\nJSON: {json_string}"
+                )
+                raise Exception(f"Chave 'choice' inválida: {choice}")
+
+            if not isinstance(reason, str) or not reason.strip():
+                print(
+                    f"ERRO DE PROCESSAMENTO: Chave 'reason' ausente, não é uma string ou está vazia.\nJSON: {json_string}"
+                )
+                raise Exception(f"Chave 'reason' inválida: {reason}")
+
+            # 4. Retornar os dados validados
+            return choice, reason
+
+        except json.JSONDecodeError as ej:
+            print(
+                f"ERRO DE PROCESSAMENTO: Falha ao decodificar JSON.\nString extraída: {json_string}"
+            )
+            raise ej
 
     def _build_llm_prompt(
         self,
@@ -676,30 +795,56 @@ class LLMPlayerAdapter(PlayerStrategy):
         # Formatar dados do personagem de forma estruturada para LLM
         structured_cockpit = self._format_structured_cockpit(character_data)
 
-        prompt_parts = [            
-            "ESTADO ATUAL DO PERSONAGEM:",
+        # Construir prompt no formato YAML
+        prompt_parts = [
+            "#=============== INÍCIO DO COCKPIT DO JOGO ===============",
+            "",
+            "CONTEXTO_DA_PAGINA:",
+            f"  ID_PAGINA: {current_page_number}",
+            "  NARRATIVA: >",
+            f"    {current_page_data.get('text', '')}",
+            "  INSTRUCOES_MECANICAS: >",
+            f"    {current_page_data.get('mechanics_instructions', 'Nenhuma')}",
+            "",
+            "ESTADO_DO_PERSONAGEM:",
             structured_cockpit,
             "",
-            "PAGINA ATUAL:",
-            f"Página {current_page_number}: {current_page_data}",
-            "",
-            "HISTÓRICO DE DECISÕES:",
-            "\n".join(
-                [
-                    f"- Página {entry.get('page_number', 0)}: {entry.get('choice_made', {}).get('text', 'N/A')}"
-                    for entry in history[-5:]
-                ]
-            ),
-            "",
-            "ESCOLHAS DISPONÍVEIS:",
+            "HISTORICO_DE_DECISOES:",
         ]
 
+        # Adicionar histórico de decisões
+        if not history:
+            prompt_parts.append("  - Vazio")
+        else:
+            for entry in history[-5:]:
+                page_num = entry.get("page_number", "N/A")
+                choice_index = int(entry.get("choice_index")) + 1
+                choice_made = entry.get("choice_made", {}).get("text", "Follow-up action")
+                reason = entry.get("reason", "N/A")
+                prompt_parts.append(
+                    f"  - Página: {page_num} > id_escolha: {choice_index} > {choice_made} > Motivo: {reason}"
+                )
+
+        # Adicionar escolhas disponíveis
+        prompt_parts.append("")
+        prompt_parts.append("ESCOLHAS_DISPONIVEIS:")
+
         for i, choice in enumerate(choices, 1):
-            choice_desc = choice.get("text", f"Escolha {i}")
-            prompt_parts.append(f"{i}. {choice_desc}")
+            prompt_parts.append(f"  - id: {i}")
+            prompt_parts.append(f"    texto: \"{choice.get('text', 'N/A')}\"")
+
+            # Coletar consequências mecânicas
+            mechanics = []
+            for key in ["set-occupation", "roll", "goto", "effects"]:
+                if key in choice:
+                    mechanics.append(f"{key}: {choice[key]}")
+
+            mechanics_str = "; ".join(mechanics) if mechanics else "Nenhuma"
+            prompt_parts.append(f'    consequencias_mecanicas: "{mechanics_str}"')
 
         prompt_parts.append("")
-        
+        prompt_parts.append("#=============== FIM DO COCKPIT DO JOGO ===============")
+
         return "\n".join(prompt_parts)
 
     def _format_choice_for_display(self, choice: Dict[str, Any]) -> str:
@@ -753,37 +898,40 @@ class LLMPlayerAdapter(PlayerStrategy):
         health = character_data.get("health_status", {})
         resources = character_data.get("resources", {})
 
-        lines.append("CHARACTER_PROFILE:")
-        lines.append(f"  Name: {char_info.get('name', 'Unknown')}")
-        lines.append(f"  Occupation: {char_info.get('occupation', 'N/A')}")
+        lines.append("  PERFIL:")
+        lines.append(f"    Nome: {char_info.get('name', 'Unknown')}")
+        lines.append(f"    Ocupacao: {char_info.get('occupation', 'N/A')}")
+        lines.append(f"    Status: {health.get('current_level', 'Unknown')}")
+        lines.append(f"    Dano: {health.get('damage_taken', 0)}/4")
         lines.append(
-            f"  Health: {health.get('current_level', 'Unknown')} (Damage: {health.get('damage_taken', 0)})"
+            f"    Sorte: {resources.get('luck', {}).get('current', 0)}/{resources.get('luck', {}).get('starting', 0)}"
         )
         lines.append(
-            f"  Luck: {resources.get('luck', {}).get('current', 0)}/{resources.get('luck', {}).get('starting', 0)}"
-        )
-        lines.append(
-            f"  Magic: {resources.get('magic', {}).get('current', 0)}/{resources.get('magic', {}).get('starting', 0)}"
+            f"    Magia: {resources.get('magic', {}).get('current', 0)}/{resources.get('magic', {}).get('starting', 0)}"
         )
         lines.append("")
 
         # Características importantes
         characteristics = character_data.get("characteristics", {})
         if characteristics:
-            lines.append("CHARACTERISTICS:")
+            lines.append("  CARACTERISTICAS:")
             char_list = []
             for char_name in ["STR", "CON", "DEX", "INT", "POW"]:
                 char_data = characteristics.get(char_name, {})
                 if char_data:
                     char_list.append(f"{char_name}:{char_data.get('full', 0)}")
-            lines.append(f"  {' '.join(char_list)}")
+            lines.append(f"    {' '.join(char_list)}")
             lines.append("")
 
         # Habilidades mais relevantes
         skills = character_data.get("skills", {})
         if skills:
-            lines.append("KEY_SKILLS:")
-            lines.append(f"  {skills}")
+            lines.append("  PERICIAS:")
+            # Formatar habilidades de forma mais legível
+            skills_str = ", ".join(
+                [f"{k}:{v.get('full', 0)}%" for k, v in skills.items()]
+            )
+            lines.append(f"    {skills_str}")
             lines.append("")
 
         # Inventário resumido
@@ -795,20 +943,20 @@ class LLMPlayerAdapter(PlayerStrategy):
             items.extend(inventory["weapons"])
 
         if items:
-            lines.append(f"INVENTORY: {', '.join(items[:5])}")  # Primeiros 5 items
+            lines.append(f"  INVENTARIO: {', '.join(items[:5])}")  # Primeiros 5 items
         else:
-            lines.append("INVENTORY: Empty")
+            lines.append("  INVENTARIO: Vazio")
         lines.append("")
 
         # Modificadores ativos (resumidos)
         modifiers = character_data.get("modifiers", [])
         if modifiers:
             mod_summary = [
-                f"{mod.get('skill', 'General')}:{mod.get('type', 'Unknown')}"
+                f"{mod.get('skill', 'Geral')}:{mod.get('type', 'Desconhecido')}"
                 for mod in modifiers[:3]
             ]
-            lines.append(f"ACTIVE_MODIFIERS: {' '.join(mod_summary)}")
+            lines.append(f"  MODIFICADORES_ATIVOS: {' '.join(mod_summary)}")
         else:
-            lines.append("ACTIVE_MODIFIERS: None")
+            lines.append("  MODIFICADORES_ATIVOS: Nenhum")
 
         return "\n".join(lines)
