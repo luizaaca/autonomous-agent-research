@@ -1,6 +1,3 @@
-
-# arch.spec.md
-
 # Especificação Arquitetural: MVP para Jogo de Texto Autônomo
 
 ## Visão Geral
