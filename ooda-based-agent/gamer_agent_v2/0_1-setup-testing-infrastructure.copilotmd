@@ -72,12 +72,12 @@ make test
 Deve retornar 0 testes executados (mas sem erros).
 
 ## Critérios de Aceitação
-- [ ] Execução de `make test` funciona sem erros
-- [ ] Relatório de cobertura HTML gerado em `htmlcov/`
-- [ ] Comando `make coverage` abre automaticamente o relatório no navegador
-- [ ] Estrutura de diretórios de testes organizada conforme especificado
-- [ ] Arquivos de configuração pytest.ini e .coveragerc presentes
-- [ ] 100% de aprovação em testes vazios (0 falhas)
+- [x] Execução de `make test` funciona sem erros
+- [x] Relatório de cobertura HTML gerado em `htmlcov/`
+- [x] Comando `make coverage` abre automaticamente o relatório no navegador
+- [x] Estrutura de diretórios de testes organizada conforme especificado
+- [x] Arquivos de configuração pytest.ini e .coveragerc presentes
+- [x] 100% de aprovação em testes vazios (0 falhas)
 
 ## Exemplo de Implementação
 Após a configuração, um teste simples deve funcionar:
